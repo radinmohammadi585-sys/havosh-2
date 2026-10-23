@@ -1,28 +1,1318 @@
 <!doctype html>
-<html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#080d20"><title>کاوش AI 2 | Kavosh AI 2</title><style>
-:root{color-scheme:dark;--bg:#070b18;--panel:rgba(17,25,51,.88);--line:rgba(153,177,255,.2);--text:#f2f5ff;--muted:#aab5d6;--blue:#8ba7ff;--violet:#b19aff;--good:#8de7c1;--bad:#ffb4bd}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 15% 10%,#17285b 0,transparent 38%),radial-gradient(ellipse at 90% 75%,#30215a 0,transparent 32%),var(--bg);color:var(--text);font-family:Tahoma,Arial,sans-serif;padding:18px}.stars{position:fixed;inset:0;pointer-events:none;opacity:.35;background-image:radial-gradient(2px 2px at 20px 30px,#fff 50%,transparent),radial-gradient(1px 1px at 80px 90px,#a9c1ff 50%,transparent),radial-gradient(1px 1px at 150px 40px,#fff 50%,transparent);background-size:190px 130px}.app{position:relative;margin:auto;width:min(1000px,100%);min-height:90vh;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:28px;overflow:hidden;background:var(--panel);backdrop-filter:blur(18px);box-shadow:0 25px 100px #0007}.top{padding:18px 22px;display:flex;align-items:center;gap:13px;border-bottom:1px solid var(--line)}.orb{width:45px;height:45px;flex-shrink:0;border-radius:50%;background:radial-gradient(circle at 35% 30%,white,#8db4ff 18%,#7658d8 47%,#171a4a 72%);box-shadow:0 0 25px #8179ff80}.brand{font-size:20px;font-weight:700}.sub{font-size:12px;color:var(--muted);margin-top:5px}.status{margin-right:auto;font-size:12px;color:var(--muted);text-align:left}.nav{display:flex;gap:8px;flex-wrap:wrap;padding:12px 18px;border-bottom:1px solid var(--line);background:#080d1b88}.nav button,.secondary,.suggestions button{background:#ffffff08;border:1px solid var(--line);color:var(--text);border-radius:999px;padding:10px 14px;cursor:pointer;font:inherit;font-size:13px}.nav button.active{background:linear-gradient(120deg,#7e9dfb44,#b19aff44);border-color:#a8b8ff77}.nav button:hover,.secondary:hover,.suggestions button:hover{background:#ffffff16}main{flex:1;padding:24px;display:flex;flex-direction:column;gap:17px}.view{display:none}.view.active{display:block}.intro{text-align:center;padding:24px 10px 12px}.intro h1{font-size:clamp(25px,5vw,40px);margin:0 0 12px}.intro p,.muted{color:var(--muted);line-height:1.9}.suggestions{display:flex;gap:9px;justify-content:center;flex-wrap:wrap;margin-top:20px}.messages{display:flex;flex-direction:column;gap:14px;margin-top:18px}.bubble{white-space:pre-wrap;line-height:1.9;padding:14px 17px;border:1px solid var(--line);border-radius:18px;max-width:90%;overflow-wrap:anywhere}.user{align-self:flex-start;background:#4d5cb52b}.assistant{align-self:flex-end;background:#111a35}.composer{display:flex;gap:10px;align-items:end;padding:16px;border-top:1px solid var(--line);background:#080d1bcc}.composer textarea,.field{width:100%;resize:vertical;min-height:50px;background:#111a31;color:var(--text);border:1px solid var(--line);border-radius:14px;padding:14px;font:inherit;outline:none}.composer textarea{flex:1;max-height:180px}.send,.primary{border:0;border-radius:14px;padding:14px 18px;color:#10132c;font-weight:bold;background:linear-gradient(120deg,#a5c5ff,#c6aaff);cursor:pointer;font:inherit}.send:disabled,.primary:disabled{opacity:.55}.notice{font-size:12px;color:var(--muted);text-align:center;padding:0 16px 14px}.error{color:var(--bad)}.ok{color:var(--good)}.panel-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:18px}.tile,.card{border:1px solid var(--line);border-radius:18px;padding:17px;background:#0b1229a8}.tile strong{display:block;font-size:22px;margin-bottom:8px}.tile span{font-size:13px;color:var(--muted)}.card h2{margin-top:0}.stack{display:grid;gap:12px;max-width:680px}.actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}.result{margin-top:16px;line-height:1.8;overflow-wrap:anywhere}.result img,.result video{display:block;max-width:100%;max-height:520px;border-radius:16px;border:1px solid var(--line);margin-top:12px}.login-box{max-width:480px;margin:18px auto}.small{font-size:12px;color:var(--muted);line-height:1.8}label{display:block;margin-bottom:7px;font-size:13px;color:#dce4ff}@media(max-width:600px){body{padding:7px}.app{min-height:96vh;border-radius:18px}.top{padding:15px}.nav{padding:10px;gap:6px}.nav button{padding:9px 11px;font-size:12px}main{padding:15px}.composer{padding:10px}.send{padding:13px}.status{max-width:110px}}
-</style></head><body><div class="stars"></div><section class="app"><header class="top"><div class="orb"></div><div><div class="brand">کاوش AI 2 <span style="color:var(--blue)">✦</span></div><div class="sub">دستیار هوشمند · نسخهٔ ۲</div></div><div class="status" id="health">در حال اتصال…</div></header>
-<nav class="nav" aria-label="بخش‌ها"><button class="active" data-view="chat">💬 گفت‌وگو</button><button data-view="image">🖼️ ساخت تصویر</button><button data-view="video">🎬 ساخت ویدئو</button><button data-view="manager">🛡️ پنل مدیر</button><button data-view="deputy">📋 پنل معاون</button><button data-view="teacher">👩‍🏫 پنل معلم‌ها</button></nav>
-<main>
-<section class="view active" id="view-chat"><div class="intro" id="intro"><h1>به کاوش AI 2 خوش آمدی</h1><p>ایده‌هایت را کشف کن؛ از ریاضی و علم تا فضا و کهکشان‌ها.</p><div class="suggestions"><button type="button">یک مفهوم علمی را توضیح بده</button><button type="button">کمکم کن مسئله‌ای را حل کنم</button><button type="button">دربارهٔ کهکشان آندرومدا بگو</button></div></div><div class="messages" id="messages" aria-live="polite"></div></section>
-<section class="view" id="view-image"><div class="card"><h2>🖼️ آزمایشگاه تصویر</h2><p class="muted">توضیح تصویر دلخواهت را بنویس. برای تولید واقعی، ارائه‌دهندهٔ تصویر باید در تنظیمات خصوصی سرور متصل شود.</p><div class="stack"><div><label for="imagePrompt">توضیح تصویر</label><textarea class="field" id="imagePrompt" rows="4" placeholder="مثلاً: یک سیارهٔ آبی کنار سیاه‌چاله، سبک علمی‌تخیلی سینمایی"></textarea></div><div class="actions"><button class="primary" id="makeImage">ساخت تصویر ✨</button><span class="small" id="imageState"></span></div></div><div class="result" id="imageResult"></div></div></section>
-<section class="view" id="view-video"><div class="card"><h2>🎬 استودیوی ویدئو</h2><p class="muted">یک صحنه یا ایده برای ویدئو بنویس. تولید ویدئو به API ارائه‌دهنده‌ای نیاز دارد که در سرور پیکربندی شود.</p><div class="stack"><div><label for="videoPrompt">شرح ویدئو</label><textarea class="field" id="videoPrompt" rows="4" placeholder="مثلاً: دوربین از میان سحابی عبور می‌کند و به یک کهکشان می‌رسد"></textarea></div><div class="actions"><button class="primary" id="makeVideo">درخواست ساخت ویدئو 🎞️</button><span class="small" id="videoState"></span></div></div><div class="result" id="videoResult"></div></div></section>
-<section class="view" id="view-manager"><div class="card"><h2>🛡️ پنل مدیر</h2><p class="muted">ورود مدیر با رمزی که فقط در Environment سرور تنظیم می‌شود.</p><div class="login-box" id="managerLogin"><label for="managerPassword">رمز مدیر</label><input class="field" id="managerPassword" type="password" autocomplete="current-password" placeholder="رمز عبور"><div class="actions"><button class="primary" data-login="manager">ورود به پنل</button><span class="small" id="managerError"></span></div></div><div id="managerPanel" hidden></div></div></section>
-<section class="view" id="view-deputy"><div class="card"><h2>📋 پنل معاون</h2><p class="muted">یک معاون را انتخاب کن. هر معاون رمز جداگانه دارد که فقط در تنظیمات خصوصی سرور ذخیره می‌شود. این نسخه ۸ معاون را پشتیبانی می‌کند.</p><div class="login-box" id="deputyLogin"><label for="deputyNumber">انتخاب معاون</label><select class="field" id="deputyNumber"><option value="1">معاون شمارهٔ ۱</option><option value="2">معاون شمارهٔ ۲</option><option value="3">معاون شمارهٔ ۳</option><option value="4">معاون شمارهٔ ۴</option><option value="5">معاون شمارهٔ ۵</option><option value="6">معاون شمارهٔ ۶</option><option value="7">معاون شمارهٔ ۷</option><option value="8">معاون شمارهٔ ۸</option></select><label for="deputyPassword">رمز معاون انتخاب‌شده</label><input class="field" id="deputyPassword" type="password" autocomplete="current-password" placeholder="رمز عبور"><div class="actions"><button class="primary" data-login="deputy">ورود به پنل</button><span class="small" id="deputyError"></span></div></div><div id="deputyPanel" hidden></div></div></section>
-<section class="view" id="view-teacher"><div class="card"><h2>👩‍🏫 پنل معلم‌ها</h2><p class="muted">معلم‌ها با حساب جداگانه وارد می‌شوند. برای این نسخه ۱۰ حساب معلم قابل تنظیم است؛ رمز هر حساب فقط در تنظیمات خصوصی سرور قرار می‌گیرد.</p><div class="login-box" id="teacherLogin"><label for="teacherNumber">انتخاب حساب معلم</label><select class="field" id="teacherNumber"><option value="1">معلم شمارهٔ 1</option><option value="2">معلم شمارهٔ 2</option><option value="3">معلم شمارهٔ 3</option><option value="4">معلم شمارهٔ 4</option><option value="5">معلم شمارهٔ 5</option><option value="6">معلم شمارهٔ 6</option><option value="7">معلم شمارهٔ 7</option><option value="8">معلم شمارهٔ 8</option><option value="9">معلم شمارهٔ 9</option><option value="10">معلم شمارهٔ 10</option></select><label for="teacherPassword">رمز معلم انتخاب‌شده</label><input class="field" id="teacherPassword" type="password" autocomplete="current-password" placeholder="رمز عبور"><div class="actions"><button class="primary" data-login="teacher">ورود به پنل</button><span class="small" id="teacherError"></span></div></div><div id="teacherPanel" hidden></div></div></section>
-</main><form class="composer" id="form"><textarea id="prompt" placeholder="پیامت را اینجا بنویس…" aria-label="پیام" required></textarea><button class="send" id="send" type="submit">ارسال ↑</button></form><div class="notice">کلیدها و رمزهای عبور باید فقط در تنظیمات خصوصی سرور باشند، نه در صفحه یا GitHub.</div></section>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#050814">
+<title>کاوش AI 2 | Kavosh AI 2</title>
+
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #050814;
+  --panel: rgba(12,18,39,.88);
+  --line: rgba(153,177,255,.2);
+  --text: #f2f5ff;
+  --muted: #aab5d6;
+  --blue: #8ba7ff;
+  --violet: #b19aff;
+  --good: #8de7c1;
+  --bad: #ffb4bd;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 15% 10%,#17285b 0,transparent 38%),
+    radial-gradient(ellipse at 90% 75%,#30215a 0,transparent 32%),
+    var(--bg);
+  color: var(--text);
+  font-family: Tahoma,Arial,sans-serif;
+}
+
+#starfield {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.nebula {
+  position: fixed;
+  inset: -20%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 22% 35%,#293e8c20,transparent 34%),
+    radial-gradient(ellipse at 80% 70%,#7847ad20,transparent 30%);
+  animation: nebulaDrift 28s ease-in-out infinite alternate;
+}
+
+@keyframes nebulaDrift {
+  from {
+    transform: translate3d(-1%,0,0) scale(1);
+  }
+  to {
+    transform: translate3d(2%,-1%,0) scale(1.06);
+  }
+}
+
+.shell {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 245px minmax(0,1fr);
+  min-height: 100vh;
+  max-width: 1600px;
+  margin: auto;
+  padding: 16px;
+  gap: 15px;
+}
+
+.sidebar {
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: rgba(8,13,30,.84);
+  backdrop-filter: blur(22px);
+  padding: 17px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: 0 20px 70px #0005;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 4px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.orb {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%,white,#8db4ff 18%,#7658d8 47%,#171a4a 72%);
+  box-shadow: 0 0 25px #8179ff80,0 0 60px #8179ff28;
+  animation: orbPulse 4s ease-in-out infinite;
+}
+
+@keyframes orbPulse {
+  50% {
+    box-shadow: 0 0 35px #8179ffb0,0 0 80px #8179ff45;
+    transform: scale(1.04);
+  }
+}
+
+.brand-name {
+  font-size: 19px;
+  font-weight: 800;
+}
+
+.brand-sub {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 5px;
+}
+
+.nav-label {
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: #7583b0;
+  padding: 0 8px;
+}
+
+.nav {
+  display: grid;
+  gap: 7px;
+}
+
+.nav button,
+.secondary,
+.suggestions button {
+  width: 100%;
+  text-align: right;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #dbe4ff;
+  border-radius: 13px;
+  padding: 12px 13px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  transition: background .2s,border .2s,transform .2s;
+}
+
+.nav button:hover,
+.secondary:hover,
+.suggestions button:hover {
+  background: #ffffff0d;
+  border-color: var(--line);
+  transform: translateX(-2px);
+}
+
+.nav button.active {
+  background: linear-gradient(110deg,#718dfb2e,#b19aff20);
+  border-color: #a8b8ff55;
+  box-shadow: inset -3px 0 #a6b9ff;
+}
+
+.nav button span {
+  display: inline-block;
+  width: 27px;
+}
+
+.side-bottom {
+  margin-top: auto;
+  border-top: 1px solid var(--line);
+  padding-top: 15px;
+}
+
+.status-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 10px;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #8de7c1;
+  box-shadow: 0 0 12px #8de7c1;
+}
+
+.side-note {
+  font-size: 10px;
+  line-height: 1.8;
+  color: #7482ab;
+  padding: 0 10px;
+}
+
+.main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  overflow: hidden;
+  background: rgba(10,15,34,.62);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 20px 80px #0004;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 17px 22px;
+  border-bottom: 1px solid var(--line);
+  background: #080d1b77;
+}
+
+.page-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.page-sub {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 5px;
+}
+
+.top-chip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 12px;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+main {
+  flex: 1;
+  min-height: 0;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.view {
+  display: none;
+  min-height: 0;
+}
+
+.view.active {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.intro {
+  text-align: center;
+  padding: clamp(20px,5vh,65px) 10px 24px;
+}
+
+.eyebrow {
+  font-size: 11px;
+  color: #b7c5ff;
+  letter-spacing: 2px;
+  margin-bottom: 15px;
+}
+
+.intro h1 {
+  font-size: clamp(28px,4vw,48px);
+  line-height: 1.35;
+  margin: 0 0 15px;
+  background: linear-gradient(100deg,#fff,#c5d2ff 50%,#c6aaff);
+  color: transparent;
+  background-clip: text;
+}
+
+.intro p,
+.muted {
+  color: var(--muted);
+  line-height: 2;
+}
+
+.intro p {
+  max-width: 650px;
+  margin: 0 auto;
+}
+
+.suggestions {
+  display: flex;
+  gap: 9px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+
+.suggestions button {
+  width: auto;
+  border-color: var(--line);
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-size: 12px;
+}
+
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0 auto 18px;
+  width: min(850px,100%);
+}
+
+.bubble {
+  white-space: pre-wrap;
+  line-height: 2;
+  padding: 14px 17px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  max-width: 92%;
+  overflow-wrap: anywhere;
+}
+
+.user {
+  align-self: flex-start;
+  background: #4d5cb52b;
+  border-bottom-left-radius: 5px;
+}
+
+.assistant {
+  align-self: flex-end;
+  background: #111a35;
+  border-bottom-right-radius: 5px;
+}
+
+.chat-area {
+  flex: 1;
+  min-height: 160px;
+}
+
+.composer {
+  display: flex;
+  gap: 10px;
+  align-items: end;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: #080d1bcc;
+  width: min(950px,100%);
+  margin: 0 auto 15px;
+  box-shadow: 0 12px 40px #0003;
+}
+
+.composer textarea,
+.field {
+  width: 100%;
+  resize: vertical;
+  min-height: 48px;
+  background: #111a31;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 13px;
+  font: inherit;
+  outline: none;
+}
+
+.composer textarea {
+  flex: 1;
+  max-height: 180px;
+  resize: none;
+}
+
+.composer textarea:focus,
+.field:focus {
+  border-color: #91a8ff99;
+  box-shadow: 0 0 0 3px #829dff12;
+}
+
+.send,
+.primary {
+  border: 0;
+  border-radius: 14px;
+  padding: 13px 18px;
+  color: #10132c;
+  font-weight: bold;
+  background: linear-gradient(120deg,#a5c5ff,#c6aaff);
+  cursor: pointer;
+  font: inherit;
+  white-space: nowrap;
+}
+
+.send:disabled,
+.primary:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+
+.notice {
+  font-size: 10px;
+  color: #7886b0;
+  text-align: center;
+  padding: 0 16px 14px;
+  line-height: 1.8;
+}
+
+.error {
+  color: var(--bad) !important;
+}
+
+.ok {
+  color: var(--good) !important;
+}
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: clamp(17px,3vw,27px);
+  background: linear-gradient(145deg,#101a36c9,#0a1025c9);
+  box-shadow: 0 12px 40px #0002;
+}
+
+.card h2 {
+  margin: 0 0 10px;
+  font-size: 21px;
+}
+
+.card .muted {
+  font-size: 13px;
+}
+
+.panel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(160px,1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.tile {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 17px;
+  background: #0b1229a8;
+}
+
+.tile strong {
+  display: block;
+  font-size: 18px;
+  margin-bottom: 9px;
+  overflow-wrap: anywhere;
+}
+
+.tile span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.stack {
+  display: grid;
+  gap: 13px;
+  max-width: 760px;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.result {
+  margin-top: 16px;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+}
+
+.result img,
+.result video {
+  display: block;
+  max-width: 100%;
+  max-height: 520px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  margin-top: 12px;
+}
+
+.login-box {
+  max-width: 500px;
+  margin: 20px auto;
+}
+
+.small {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.9;
+}
+
+label {
+  display: block;
+  margin: 12px 0 7px;
+  font-size: 12px;
+  color: #dce4ff;
+}
+
+.hidden {
+  display: none !important;
+}
+
+@media(max-width:800px) {
+  .shell {
+    grid-template-columns: 1fr;
+    padding: 7px;
+    gap: 8px;
+  }
+
+  .sidebar {
+    padding: 10px;
+    border-radius: 18px;
+    gap: 10px;
+  }
+
+  .brand {
+    padding: 3px 5px 10px;
+  }
+
+  .orb {
+    width: 36px;
+    height: 36px;
+  }
+
+  .brand-name {
+    font-size: 16px;
+  }
+
+  .nav-label,
+  .side-bottom {
+    display: none;
+  }
+
+  .nav {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .nav button {
+    white-space: nowrap;
+    width: auto;
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+
+  .nav button span {
+    width: auto;
+    margin-left: 5px;
+  }
+
+  .main {
+    border-radius: 18px;
+    min-height: 70vh;
+  }
+
+  .topbar {
+    padding: 13px 15px;
+  }
+
+  main {
+    padding: 14px;
+  }
+
+  .intro {
+    padding: 25px 5px;
+  }
+
+  .composer {
+    padding: 9px;
+    border-radius: 15px;
+  }
+
+  .send {
+    padding: 12px;
+  }
+
+  .top-chip {
+    font-size: 10px;
+    padding: 7px 9px;
+  }
+}
+
+@media(prefers-reduced-motion:reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
+</style>
+</head>
+
+<body>
+<canvas id="starfield" aria-hidden="true"></canvas>
+<div class="nebula" aria-hidden="true"></div>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="orb"></div>
+      <div>
+        <div class="brand-name">کاوش AI 2 <span style="color:var(--blue)">✦</span></div>
+        <div class="brand-sub">مرکز کشف و هوش مصنوعی</div>
+      </div>
+    </div>
+
+    <div class="nav-label">فضای کاوش</div>
+
+    <nav class="nav" aria-label="بخش‌های برنامه">
+      <button class="active" data-view="chat"><span>✦</span> گفت‌وگوی هوشمند</button>
+      <button data-view="image"><span>▧</span> آزمایشگاه تصویر</button>
+      <button data-view="video"><span>▷</span> استودیوی ویدئو</button>
+    </nav>
+
+    <div class="nav-label">مدیریت سامانه</div>
+
+    <nav class="nav" aria-label="پنل‌های مدیریت">
+      <button data-view="manager"><span>⬡</span> پنل مدیر</button>
+      <button data-view="deputy"><span>▤</span> پنل معاون‌ها</button>
+      <button data-view="teacher"><span>♧</span> پنل معلم‌ها</button>
+    </nav>
+
+    <div class="side-bottom">
+      <div class="status-pill">
+        <i class="dot"></i>
+        <span id="health">در حال اتصال به هسته…</span>
+      </div>
+      <div class="side-note">
+        نسخهٔ ۲.۱ · طراحی فضایی<br>
+        کلیدها و رمزها فقط باید در تنظیمات خصوصی سرور بمانند.
+      </div>
+    </div>
+  </aside>
+
+  <section class="main">
+    <header class="topbar">
+      <div>
+        <div class="page-title" id="pageTitle">گفت‌وگوی هوشمند</div>
+        <div class="page-sub" id="pageSub">ایده‌ها را به پرسش تبدیل کن؛ کاوش از همین‌جا شروع می‌شود.</div>
+      </div>
+      <div class="top-chip">● سامانهٔ کاوش · v2.1</div>
+    </header>
+
+    <main>
+      <section class="view active" id="view-chat">
+        <div class="chat-area">
+          <div class="intro" id="intro">
+            <div class="eyebrow">یک جهان برای کشف کردن</div>
+            <h1>از یک سؤال شروع کن.</h1>
+            <p>
+              از ریاضی و برنامه‌نویسی تا ستاره‌ها، کهکشان‌ها و ایده‌های بزرگ؛
+              کاوش کمک می‌کند موضوع‌ها را دقیق‌تر بفهمی، مرحله‌به‌مرحله یاد بگیری
+              و ایده‌هایت را گسترش بدهی.
+            </p>
+
+            <div class="suggestions">
+              <button type="button">سیاه‌چاله چطور کار می‌کند؟</button>
+              <button type="button">یک مفهوم علمی را ساده توضیح بده</button>
+              <button type="button">کمکم کن مسئله‌ای را حل کنم</button>
+              <button type="button">یک ایده برای پروژهٔ فضایی بده</button>
+            </div>
+          </div>
+
+          <div class="messages" id="messages" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section class="view" id="view-image">
+        <div class="card">
+          <h2>آزمایشگاه تصویر <span style="color:var(--violet)">✧</span></h2>
+          <p class="muted">
+            ایده‌ات را با جزئیات توصیف کن: سوژه، محیط، نور، زاویهٔ دوربین و سبک.
+            برای ساخت واقعی، ارائه‌دهندهٔ تصویر باید در تنظیمات خصوصی سرور متصل شده باشد.
+          </p>
+
+          <div class="stack">
+            <div>
+              <label for="imagePrompt">توضیح تصویر</label>
+              <textarea class="field" id="imagePrompt" rows="5"
+                placeholder="مثلاً: یک ایستگاه فضایی کنار سیاره‌ای حلقه‌دار، نور سینمایی، جزئیات علمی، نمای عریض..."></textarea>
+            </div>
+
+            <div class="actions">
+              <button class="primary" id="makeImage">ساخت تصویر ✨</button>
+              <span class="small" id="imageState"></span>
+            </div>
+          </div>
+
+          <div class="result" id="imageResult"></div>
+        </div>
+      </section>
+
+      <section class="view" id="view-video">
+        <div class="card">
+          <h2>استودیوی ویدئو <span style="color:var(--violet)">▷</span></h2>
+          <p class="muted">
+            حرکت دوربین، مدت، فضا، نور و اتفاق اصلی صحنه را توضیح بده.
+            تولید ویدئو به API سازگار و تنظیم‌شده نیاز دارد.
+          </p>
+
+          <div class="stack">
+            <div>
+              <label for="videoPrompt">شرح صحنهٔ ویدئو</label>
+              <textarea class="field" id="videoPrompt" rows="5"
+                placeholder="مثلاً: دوربین آرام از میان سحابی آبی عبور می‌کند و به یک کهکشان مارپیچی می‌رسد..."></textarea>
+            </div>
+
+            <div class="actions">
+              <button class="primary" id="makeVideo">درخواست ساخت ویدئو 🎞️</button>
+              <span class="small" id="videoState"></span>
+            </div>
+          </div>
+
+          <div class="result" id="videoResult"></div>
+        </div>
+      </section>
+
+      <section class="view" id="view-manager">
+        <div class="card">
+          <h2>پنل مدیر</h2>
+          <p class="muted">ورود امن با رمزی که فقط در Environment سرور تنظیم شده است.</p>
+
+          <div class="login-box" id="managerLogin">
+            <label for="managerPassword">رمز مدیر</label>
+            <input class="field" id="managerPassword" type="password"
+              autocomplete="current-password" placeholder="رمز عبور">
+
+            <div class="actions">
+              <button class="primary" data-login="manager">ورود به پنل</button>
+              <span class="small" id="managerError"></span>
+            </div>
+          </div>
+
+          <div id="managerPanel" hidden></div>
+        </div>
+      </section>
+
+      <section class="view" id="view-deputy">
+        <div class="card">
+          <h2>پنل معاون‌ها</h2>
+          <p class="muted">یکی از ۸ حساب معاون را انتخاب کن. هر حساب می‌تواند رمز مستقل داشته باشد.</p>
+
+          <div class="login-box" id="deputyLogin">
+            <label for="deputyNumber">انتخاب معاون</label>
+            <select class="field" id="deputyNumber">
+              <option value="1">معاون شمارهٔ ۱</option>
+              <option value="2">معاون شمارهٔ ۲</option>
+              <option value="3">معاون شمارهٔ ۳</option>
+              <option value="4">معاون شمارهٔ ۴</option>
+              <option value="5">معاون شمارهٔ ۵</option>
+              <option value="6">معاون شمارهٔ ۶</option>
+              <option value="7">معاون شمارهٔ ۷</option>
+              <option value="8">معاون شمارهٔ ۸</option>
+            </select>
+
+            <label for="deputyPassword">رمز معاون</label>
+            <input class="field" id="deputyPassword" type="password"
+              autocomplete="current-password" placeholder="رمز عبور">
+
+            <div class="actions">
+              <button class="primary" data-login="deputy">ورود به پنل</button>
+              <span class="small" id="deputyError"></span>
+            </div>
+          </div>
+
+          <div id="deputyPanel" hidden></div>
+        </div>
+      </section>
+
+      <section class="view" id="view-teacher">
+        <div class="card">
+          <h2>پنل معلم‌ها</h2>
+          <p class="muted">
+            این نسخه ۱۰ حساب معلم را پشتیبانی می‌کند.
+            رمزها باید در تنظیمات خصوصی سرور ذخیره شوند.
+          </p>
+
+          <div class="login-box" id="teacherLogin">
+            <label for="teacherNumber">انتخاب حساب معلم</label>
+            <select class="field" id="teacherNumber">
+              <option value="1">معلم شمارهٔ ۱</option>
+              <option value="2">معلم شمارهٔ ۲</option>
+              <option value="3">معلم شمارهٔ ۳</option>
+              <option value="4">معلم شمارهٔ ۴</option>
+              <option value="5">معلم شمارهٔ ۵</option>
+              <option value="6">معلم شمارهٔ ۶</option>
+              <option value="7">معلم شمارهٔ ۷</option>
+              <option value="8">معلم شمارهٔ ۸</option>
+              <option value="9">معلم شمارهٔ ۹</option>
+              <option value="10">معلم شمارهٔ ۱۰</option>
+            </select>
+
+            <label for="teacherPassword">رمز معلم</label>
+            <input class="field" id="teacherPassword" type="password"
+              autocomplete="current-password" placeholder="رمز عبور">
+
+            <div class="actions">
+              <button class="primary" data-login="teacher">ورود به پنل</button>
+              <span class="small" id="teacherError"></span>
+            </div>
+          </div>
+
+          <div id="teacherPanel" hidden></div>
+        </div>
+      </section>
+    </main>
+
+    <form class="composer" id="form">
+      <textarea id="prompt"
+        placeholder="سؤالت را بنویس… (Enter برای ارسال، Shift+Enter برای خط جدید)"
+        aria-label="پیام" required></textarea>
+      <button class="send" id="send" type="submit">ارسال ↑</button>
+    </form>
+
+    <div class="notice">
+      کاوش می‌تواند اشتباه کند؛ برای تصمیم‌های مهم، پاسخ‌ها را بررسی کن.
+      رمزها و کلیدهای API را در صفحه یا مخزن عمومی قرار نده.
+    </div>
+  </section>
+</div>
+
 <script>
-(()=>{const $=id=>document.getElementById(id);let history=[],busy=false;const sessions={manager:null,deputy:null,teacher:null};const form=$('form'),prompt=$('prompt'),send=$('send'),messagesBox=$('messages'),intro=$('intro'),health=$('health');
-function showView(name){document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id==='view-'+name));document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===name));form.style.display=name==='chat'?'flex':'none';}
-document.querySelectorAll('.nav button').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.view)));
-fetch('/api/health').then(r=>r.json()).then(d=>{health.textContent=d.keyConfigured?'هوش مصنوعی آماده':'API چت تنظیم نشده';health.classList.toggle('error',!d.keyConfigured);if(!d.imageConfigured)$('imageState').textContent='API تصویر تنظیم نشده';if(!d.videoConfigured)$('videoState').textContent='API ویدئو تنظیم نشده';}).catch(()=>{health.textContent='سرور در دسترس نیست';health.classList.add('error')});
-function bubble(text,role){const d=document.createElement('div');d.className='bubble '+role;d.textContent=text;messagesBox.appendChild(d);d.scrollIntoView({behavior:'smooth',block:'nearest'});return d}
-async function sendMessage(text){const message=(text??prompt.value).trim();if(!message||busy)return;busy=true;intro.hidden=true;send.disabled=true;prompt.disabled=true;prompt.value='';bubble(message,'user');const waiting=bubble('کاوش در حال فکر کردن است…','assistant');try{const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message,history})});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'خطا در دریافت پاسخ');waiting.textContent=d.answer;history.push({role:'user',content:message},{role:'assistant',content:d.answer});history=history.slice(-18)}catch(e){waiting.textContent='خطا: '+e.message;waiting.classList.add('error')}finally{busy=false;send.disabled=false;prompt.disabled=false;prompt.focus()}}
-form.addEventListener('submit',e=>{e.preventDefault();sendMessage()});prompt.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();form.requestSubmit()}});document.querySelectorAll('.suggestions button').forEach(b=>b.addEventListener('click',()=>sendMessage(b.textContent)));
-async function makeMedia(kind){const isImage=kind==='image',input=$(isImage?'imagePrompt':'videoPrompt'),state=$(isImage?'imageState':'videoState'),result=$(isImage?'imageResult':'videoResult'),button=$(isImage?'makeImage':'makeVideo'),promptText=input.value.trim();if(!promptText){state.textContent='اول توضیح را بنویس.';return}button.disabled=true;state.textContent='در حال ارسال درخواست…';result.replaceChildren();try{const r=await fetch(isImage?'/api/image':'/api/video',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:promptText})});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'درخواست ناموفق بود');state.textContent=d.taskId?'درخواست ثبت شد':'انجام شد';if(d.url){const a=document.createElement('a');a.href=d.url;a.target='_blank';a.rel='noopener noreferrer';a.textContent='مشاهدهٔ خروجی';result.appendChild(a);if(isImage){const img=document.createElement('img');img.src=d.url;img.alt='تصویر تولیدشده';img.loading='lazy';result.appendChild(img)}else{const video=document.createElement('video');video.src=d.url;video.controls=true;result.appendChild(video)}}else if(d.dataUrl){const img=document.createElement('img');img.src=d.dataUrl;img.alt='تصویر تولیدشده';result.appendChild(img)}else result.textContent=d.message||('شناسهٔ درخواست: '+(d.taskId||'نامشخص'));}catch(e){state.textContent='';result.textContent='خطا: '+e.message;result.classList.add('error')}finally{button.disabled=false}}
-$('makeImage').addEventListener('click',()=>makeMedia('image'));$('makeVideo').addEventListener('click',()=>makeMedia('video'));
-async function login(role){const pass=$(role+'Password').value,err=$(role+'Error');const authRole=role==='deputy'?'deputy'+$('deputyNumber').value:(role==='teacher'?'teacher'+$('teacherNumber').value:role);err.textContent='در حال بررسی…';err.classList.remove('error');try{const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role:authRole,password:pass})});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'ورود ناموفق بود');sessions[role]=d.token;$(role+'Login').hidden=true;await loadPanel(role,authRole);err.textContent='';}catch(e){err.textContent=e.message;err.classList.add('error')}}
-async function loadPanel(role,authRole){const panel=$(role+'Panel');panel.hidden=false;panel.replaceChildren();try{const r=await fetch('/api/panel/summary',{headers:{Authorization:'Bearer '+sessions[role]}});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'خطا در بارگیری پنل');const grid=document.createElement('div');grid.className='panel-grid';const roleLabel=d.role==='manager'?'مدیر':(d.role.startsWith('deputy')?'معاون شمارهٔ '+d.role.slice(6):(d.role.startsWith('teacher')?'معلم شمارهٔ '+d.role.slice(7):d.role));const vals=[['حساب واردشده',roleLabel],['نسخهٔ پروژه',d.version],['هوش مصنوعی',d.aiConfigured?'تنظیم شده':'نیازمند API'],['تولید تصویر',d.imageConfigured?'تنظیم شده':'تنظیم نشده'],['تولید ویدئو',d.videoConfigured?'تنظیم شده':'تنظیم نشده']];for(const [label,value] of vals){const tile=document.createElement('div');tile.className='tile';const strong=document.createElement('strong');strong.textContent=value;const span=document.createElement('span');span.textContent=label;tile.append(strong,span);grid.appendChild(tile)}const note=document.createElement('p');note.className='small';note.textContent=d.note;const logout=document.createElement('button');logout.className='secondary';logout.textContent='خروج از پنل';logout.addEventListener('click',async()=>{await fetch('/api/auth/logout',{method:'POST',headers:{Authorization:'Bearer '+sessions[role]}});sessions[role]=null;panel.hidden=true;$(role+'Login').hidden=false;$(role+'Password').value=''});panel.append(grid,note,logout)}catch(e){panel.textContent='خطا: '+e.message;panel.classList.add('error')}}
-document.querySelectorAll('[data-login]').forEach(b=>b.addEventListener('click',()=>login(b.dataset.login)));
+(() => {
+  const $ = id => document.getElementById(id);
+  let history = [], busy = false;
+
+  const sessions = {
+    manager: null,
+    deputy: null,
+    teacher: null
+  };
+
+  const titles = {
+    chat: [
+      'گفت‌وگوی هوشمند',
+      'ایده‌ها را به پرسش تبدیل کن؛ کاوش از همین‌جا شروع می‌شود.'
+    ],
+    image: [
+      'آزمایشگاه تصویر',
+      'ایده‌ات را با جزئیات توصیف کن.'
+    ],
+    video: [
+      'استودیوی ویدئو',
+      'صحنهٔ موردنظرت را برای ساخت ویدئو شرح بده.'
+    ],
+    manager: [
+      'پنل مدیر',
+      'مدیریت و مشاهدهٔ وضعیت سرویس.'
+    ],
+    deputy: [
+      'پنل معاون‌ها',
+      'ورود به یکی از هشت حساب معاون.'
+    ],
+    teacher: [
+      'پنل معلم‌ها',
+      'ورود به یکی از ده حساب معلم.'
+    ]
+  };
+
+  const form = $('form');
+  const prompt = $('prompt');
+  const send = $('send');
+  const messagesBox = $('messages');
+  const intro = $('intro');
+  const health = $('health');
+
+  function showView(name) {
+    document.querySelectorAll('.view').forEach(v => {
+      v.classList.toggle('active', v.id === 'view-' + name);
+    });
+
+    document.querySelectorAll('.nav button').forEach(b => {
+      b.classList.toggle('active', b.dataset.view === name);
+    });
+
+    form.style.display = name === 'chat' ? 'flex' : 'none';
+
+    $('pageTitle').textContent = titles[name][0];
+    $('pageSub').textContent = titles[name][1];
+  }
+
+  document.querySelectorAll('.nav button').forEach(b => {
+    b.addEventListener('click', () => showView(b.dataset.view));
+  });
+
+  fetch('/api/health')
+    .then(r => r.json())
+    .then(d => {
+      health.textContent = d.keyConfigured
+        ? 'هستهٔ هوش مصنوعی متصل'
+        : 'نیاز به تنظیم API';
+
+      health.classList.toggle('error', !d.keyConfigured);
+
+      if (!d.imageConfigured) {
+        $('imageState').textContent = 'ارائه‌دهندهٔ تصویر تنظیم نشده';
+      }
+
+      if (!d.videoConfigured) {
+        $('videoState').textContent = 'ارائه‌دهندهٔ ویدئو تنظیم نشده';
+      }
+    })
+    .catch(() => {
+      health.textContent = 'سرور در دسترس نیست';
+      health.classList.add('error');
+    });
+
+  function bubble(text, role) {
+    const d = document.createElement('div');
+    d.className = 'bubble ' + role;
+    d.textContent = text;
+    messagesBox.appendChild(d);
+    d.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    return d;
+  }
+
+  async function sendMessage(text) {
+    const message = (text ?? prompt.value).trim();
+
+    if (!message || busy) return;
+
+    busy = true;
+    intro.hidden = true;
+    send.disabled = true;
+    prompt.disabled = true;
+    prompt.value = '';
+
+    bubble(message, 'user');
+
+    const waiting = bubble(
+      'کاوش در حال بررسی پرسش است…',
+      'assistant'
+    );
+
+    try {
+      const r = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message,
+          history
+        })
+      });
+
+      const d = await r.json();
+
+      if (!r.ok || !d.ok) {
+        throw new Error(d.error || 'خطا در دریافت پاسخ');
+      }
+
+      waiting.textContent = d.answer;
+
+      history.push(
+        { role: 'user', content: message },
+        { role: 'assistant', content: d.answer }
+      );
+
+      history = history.slice(-24);
+    } catch (e) {
+      waiting.textContent = 'مشکلی پیش آمد: ' + e.message;
+      waiting.classList.add('error');
+    } finally {
+      busy = false;
+      send.disabled = false;
+      prompt.disabled = false;
+      prompt.focus();
+    }
+  }
+
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    sendMessage();
+  });
+
+  prompt.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      form.requestSubmit();
+    }
+  });
+
+  document.querySelectorAll('.suggestions button').forEach(b => {
+    b.addEventListener('click', () => sendMessage(b.textContent));
+  });
+
+  async function makeMedia(kind) {
+    const isImage = kind === 'image';
+
+    const input = $(isImage ? 'imagePrompt' : 'videoPrompt');
+    const state = $(isImage ? 'imageState' : 'videoState');
+    const result = $(isImage ? 'imageResult' : 'videoResult');
+    const button = $(isImage ? 'makeImage' : 'makeVideo');
+
+    const promptText = input.value.trim();
+
+    if (!promptText) {
+      state.textContent = 'اول توضیح را بنویس.';
+      return;
+    }
+
+    button.disabled = true;
+    state.textContent = 'در حال ارسال درخواست…';
+    result.replaceChildren();
+    result.classList.remove('error');
+
+    try {
+      const r = await fetch(
+        isImage ? '/api/image' : '/api/video',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            prompt: promptText
+          })
+        }
+      );
+
+      const d = await r.json();
+
+      if (!r.ok || !d.ok) {
+        throw new Error(d.error || 'درخواست ناموفق بود');
+      }
+
+      state.textContent = d.taskId
+        ? 'درخواست ثبت شد'
+        : 'انجام شد';
+
+      if (d.url) {
+        const a = document.createElement('a');
+        a.href = d.url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.textContent = 'مشاهدهٔ خروجی';
+        result.appendChild(a);
+
+        if (isImage) {
+          const img = document.createElement('img');
+          img.src = d.url;
+          img.alt = 'تصویر تولیدشده';
+          img.loading = 'lazy';
+          result.appendChild(img);
+        } else {
+          const video = document.createElement('video');
+          video.src = d.url;
+          video.controls = true;
+          result.appendChild(video);
+        }
+      } else if (d.dataUrl) {
+        const img = document.createElement('img');
+        img.src = d.dataUrl;
+        img.alt = 'تصویر تولیدشده';
+        result.appendChild(img);
+      } else {
+        result.textContent = d.message ||
+          ('شناسهٔ درخواست: ' + (d.taskId || 'نامشخص'));
+      }
+    } catch (e) {
+      state.textContent = '';
+      result.textContent = 'خطا: ' + e.message;
+      result.classList.add('error');
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  $('makeImage').addEventListener('click', () => makeMedia('image'));
+  $('makeVideo').addEventListener('click', () => makeMedia('video'));
+
+  async function login(role) {
+    const pass = $(role + 'Password').value;
+    const err = $(role + 'Error');
+
+    const authRole = role === 'deputy'
+      ? 'deputy' + $('deputyNumber').value
+      : role === 'teacher'
+        ? 'teacher' + $('teacherNumber').value
+        : role;
+
+    err.textContent = 'در حال بررسی…';
+    err.classList.remove('error');
+
+    try {
+      const r = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          role: authRole,
+          password: pass
+        })
+      });
+
+      const d = await r.json();
+
+      if (!r.ok || !d.ok) {
+        throw new Error(d.error || 'ورود ناموفق بود');
+      }
+
+      sessions[role] = d.token;
+      $(role + 'Login').hidden = true;
+
+      await loadPanel(role);
+    } catch (e) {
+      err.textContent = e.message;
+      err.classList.add('error');
+    }
+  }
+
+  async function loadPanel(role) {
+    const panel = $(role + 'Panel');
+    panel.hidden = false;
+    panel.replaceChildren();
+
+    try {
+      const r = await fetch('/api/panel/summary', {
+        headers: {
+          Authorization: 'Bearer ' + sessions[role]
+        }
+      });
+
+      const d = await r.json();
+
+      if (!r.ok || !d.ok) {
+        throw new Error(d.error || 'خطا در بارگیری پنل');
+      }
+
+      const grid = document.createElement('div');
+      grid.className = 'panel-grid';
+
+      const roleLabel = d.role === 'manager'
+        ? 'مدیر'
+        : d.role.startsWith('deputy')
+          ? 'معاون شمارهٔ ' + d.role.slice(6)
+          : d.role.startsWith('teacher')
+            ? 'معلم شمارهٔ ' + d.role.slice(7)
+            : d.role;
+
+      const vals = [
+        ['حساب واردشده', roleLabel],
+        ['نسخهٔ پروژه', d.version],
+        ['هوش مصنوعی', d.aiConfigured ? 'تنظیم شده' : 'نیازمند API'],
+        ['تولید تصویر', d.imageConfigured ? 'تنظیم شده' : 'تنظیم نشده'],
+        ['تولید ویدئو', d.videoConfigured ? 'تنظیم شده' : 'تنظیم نشده']
+      ];
+
+      for (const [label, value] of vals) {
+        const tile = document.createElement('div');
+        tile.className = 'tile';
+
+        const strong = document.createElement('strong');
+        strong.textContent = value;
+
+        const span = document.createElement('span');
+        span.textContent = label;
+
+        tile.append(strong, span);
+        grid.appendChild(tile);
+      }
+
+      const note = document.createElement('p');
+      note.className = 'small';
+      note.textContent = d.note;
+
+      const logout = document.createElement('button');
+      logout.className = 'secondary';
+      logout.textContent = 'خروج از پنل';
+
+      logout.addEventListener('click', async () => {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer ' + sessions[role]
+          }
+        });
+
+        sessions[role] = null;
+        panel.hidden = true;
+        $(role + 'Login').hidden = false;
+        $(role + 'Password').value = '';
+      });
+
+      panel.append(grid, note, logout);
+    } catch (e) {
+      panel.textContent = 'خطا: ' + e.message;
+      panel.classList.add('error');
+    }
+  }
+
+  document.querySelectorAll('[data-login]').forEach(b => {
+    b.addEventListener('click', () => login(b.dataset.login));
+  });
+
+  // ستاره‌های متحرک با چند لایهٔ عمقی و درخشش ملایم
+  const canvas = $('starfield');
+  const ctx = canvas.getContext('2d');
+
+  let w = 0;
+  let h = 0;
+  let dpr = 1;
+  let stars = [];
+  let last = 0;
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    w = innerWidth;
+    h = innerHeight;
+
+    canvas.width = Math.floor(w * dpr);
+    canvas.height = Math.floor(h * dpr);
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const count = Math.min(260, Math.floor(w * h / 5200));
+
+    stars = Array.from({ length: count }, () => ({
+      x: Math.random() * w,
+      y: Math.random() * h,
+      r: Math.random() * 1.35 + .25,
+      speed: Math.random() * .22 + .035,
+      alpha: Math.random() * .65 + .2,
+      phase: Math.random() * Math.PI * 2,
+      twinkle: Math.random() * .012 + .003,
+      layer: Math.random()
+    }));
+  }
+
+  function draw(t) {
+    const dt = Math.min((t - last) / 16.67 || 1, 2);
+    last = t;
+
+    ctx.clearRect(0, 0, w, h);
+
+    for (const s of stars) {
+      s.y += s.speed * dt * (.55 + s.layer * 1.7);
+
+      s.x += Math.sin(t * .00012 + s.phase) * .08 * dt;
+      s.phase += s.twinkle * dt;
+
+      if (s.y > h + 3) {
+        s.y = -3;
+        s.x = Math.random() * w;
+      }
+
+      if (s.x > w + 3) {
+        s.x = -3;
+      }
+
+      const alpha = Math.max(
+        .12,
+        Math.min(.95, s.alpha + Math.sin(s.phase) * .18)
+      );
+
+      ctx.beginPath();
+
+      ctx.fillStyle = `rgba(${
+        s.layer > .82
+          ? '190,198,255'
+          : '220,231,255'
+      },${alpha})`;
+
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (s.r > 1.15) {
+        ctx.strokeStyle = `rgba(153,177,255,${alpha * .25})`;
+
+        ctx.beginPath();
+
+        ctx.moveTo(s.x - s.r * 2.2, s.y);
+        ctx.lineTo(s.x + s.r * 2.2, s.y);
+
+        ctx.moveTo(s.x, s.y - s.r * 2.2);
+        ctx.lineTo(s.x, s.y + s.r * 2.2);
+
+        ctx.stroke();
+      }
+    }
+
+    requestAnimationFrame(draw);
+  }
+
+  window.addEventListener('resize', resize);
+
+  resize();
+  requestAnimationFrame(draw);
 })();
-</script></body></html>
+</script>
+</body>
+</html>
