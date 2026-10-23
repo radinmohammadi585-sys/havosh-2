@@ -782,7 +782,9 @@ $('imgGenBtn').addEventListener('click', async () => {
   const {data} = await api('/api/image', {method:'POST', body: JSON.stringify({prompt})});
   if (data.ok && (data.url || data.dataUrl)) {
     const u = data.url || data.dataUrl;
-    $('imgResult').innerHTML = `<div class="alert ok">موفق</div><img src="${escapeHtml(u)}" alt="" style="max-width:100%;border-radius:12px">`;
+    const note = data.message ? `<div class="alert ok">${escapeHtml(data.message)}</div>` : `<div class="alert ok">موفق</div>`;
+    const ep = data.enhancedPrompt ? `<p style="font-size:11px;color:var(--muted)">پرامپت ارسالی به مدل: ${escapeHtml(data.enhancedPrompt)}</p>` : '';
+    $('imgResult').innerHTML = note + ep + `<img src="${escapeHtml(u)}" alt="" style="max-width:100%;border-radius:12px">`;
   } else if (data.ok && data.taskId) {
     $('imgResult').innerHTML = `<div class="alert warn">درخواست ثبت شد (task: ${escapeHtml(String(data.taskId))}). ${escapeHtml(data.message||'')}</div>`;
   } else {
