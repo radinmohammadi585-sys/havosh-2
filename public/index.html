@@ -178,6 +178,16 @@ background:linear-gradient(135deg,#6b8cff,#9b7dff);border:none;color:#fff;font-s
     <section class="page" id="page-chat">
       <h2 style="margin-top:0" data-i18n="nav_chat">چت هوش مصنوعی</h2>
       <div id="chatSetup" class="alert warn" style="display:none"></div>
+      <details style="margin-bottom:10px" class="card">
+        <summary style="cursor:pointer;font-weight:600">حافظه گفتگو</summary>
+        <p style="font-size:12px;color:var(--muted)">نکته‌هایی که می‌خواهید مدل به خاطر بسپارد (سمت سرور برای کاربر واردشده / کلید guest).</p>
+        <div id="memoryList" class="empty">خالی</div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <input type="text" id="memoryInput" placeholder="یادداشت حافظه…" style="flex:1">
+          <button class="btn" type="button" id="memoryAddBtn">افزودن</button>
+          <button class="btn btn-ghost" type="button" id="memoryClearBtn">پاک‌سازی</button>
+        </div>
+      </details>
       <div class="chat-layout">
         <div class="chat-list">
           <button class="btn btn-primary" id="newChatBtn" type="button" style="margin-bottom:8px;width:100%" data-i18n="new_chat">گفتگوی جدید</button>
@@ -185,9 +195,27 @@ background:linear-gradient(135deg,#6b8cff,#9b7dff);border:none;color:#fff;font-s
         </div>
         <div class="chat-main">
           <div class="messages" id="messages"></div>
-          <div class="composer">
-            <textarea id="chatInput" rows="2" data-i18n-placeholder="chat_placeholder" placeholder="پیام خود را بنویسید… (Enter ارسال، Shift+Enter خط جدید)"></textarea>
-            <button class="btn btn-primary" id="sendBtn" type="button" data-i18n="send">ارسال</button>
+          <div class="composer" style="flex-direction:column;align-items:stretch">
+            <div style="display:flex;gap:8px;align-items:flex-end">
+              <textarea id="chatInput" rows="2" data-i18n-placeholder="chat_placeholder" placeholder="پیام خود را بنویسید… (Enter ارسال، Shift+Enter خط جدید)"></textarea>
+              <button class="btn btn-primary" id="sendBtn" type="button" data-i18n="send">ارسال</button>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:12px;color:var(--muted)">
+              <label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="webSearchToggle"> جست‌وجوی وب با چت</label>
+              <button class="btn btn-ghost" type="button" id="searchOnlyBtn" style="padding:6px 10px">فقط جست‌وجو</button>
+              <button class="btn btn-ghost" type="button" id="saveMemoryBtn" style="padding:6px 10px">ذخیره در حافظه</button>
+              <button class="btn btn-ghost" type="button" id="makeFileBtn" style="padding:6px 10px">ساخت فایل از پاسخ</button>
+            </div>
+            <div id="searchPanel" style="display:none;margin-top:8px" class="card"></div>
+            <details class="card" style="margin-top:8px">
+              <summary style="cursor:pointer">ساخت فایل متنی دلخواه</summary>
+              <div style="display:grid;gap:8px;margin-top:8px">
+                <input type="text" id="fileNameInput" placeholder="نام فایل مثلا report.txt" value="kavosh-note.txt">
+                <textarea id="fileContentInput" rows="4" placeholder="متن فایل…"></textarea>
+                <button class="btn btn-primary" type="button" id="makeCustomFileBtn">ساخت و دانلود</button>
+                <div id="fileCreateMsg"></div>
+              </div>
+            </details>
           </div>
         </div>
       </div>
@@ -260,7 +288,7 @@ background:linear-gradient(135deg,#6b8cff,#9b7dff);border:none;color:#fff;font-s
     <!-- SUBS -->
     <section class="page" id="page-subs">
       <h2 style="margin-top:0" data-i18n="nav_subs">اشتراک‌ها</h2>
-      <p class="alert warn">قیمت‌ها قابل‌پیکربندی هستند و پرداخت واقعی فقط با اتصال درگاه فعال می‌شود. هیچ پرداخت موفقی بدون تأیید ارائه‌دهنده اعلام نمی‌شود.</p>
+      <p class="alert warn">قیمت‌ها به «کاوش» مشخص شده‌اند. پرداخت واقعی فقط با اتصال درگاه فعال می‌شود و تا آن زمان دکمهٔ خرید فقط نمایشی است.</p>
       <div class="grid" id="planCards"></div>
     </section>
 
@@ -274,7 +302,8 @@ background:linear-gradient(135deg,#6b8cff,#9b7dff);border:none;color:#fff;font-s
     <section class="page" id="page-profile">
       <h2 style="margin-top:0" data-i18n="nav_profile">پروفایل و تنظیمات</h2>
       <div class="form-grid">
-        <p data-i18n="auth_note">ورود با نقش‌های مدیر، ۸ معاون و ۱۰ معلم از طریق رمزهای تنظیم‌شده در متغیرهای محیطی سرور. ورود گوگل نیازمند پیکربندی OAuth است و در این نسخهٔ stdlib فعال نیست — برای آن باید ارائه‌دهندهٔ احراز هویت خارجی وصل شود.</p>
+        <p data-i18n="auth_note">ورود مدیر، ۸ معاون، ۱۰ معلم و تا ۳۰۰۰ دانش‌آموز — رمزها فقط از Environment/.env. ورود گوگل نیازمند پیکربندی OAuth است و در این نسخهٔ stdlib فعال نیست — برای آن باید ارائه‌دهندهٔ احراز هویت خارجی وصل شود.</p>
+        <div id="managerEnvHintProfile" class="alert warn">در حال بررسی وضعیت رمز مدیر…</div>
         <label>نقش
           <select id="loginRole">
             <option value="manager">مدیر</option>
@@ -296,7 +325,11 @@ background:linear-gradient(135deg,#6b8cff,#9b7dff);border:none;color:#fff;font-s
             <option value="teacher8">معلم ۸</option>
             <option value="teacher9">معلم ۹</option>
             <option value="teacher10">معلم ۱۰</option>
+            <option value="student">دانش‌آموز (شماره ۱ تا ۳۰۰۰)</option>
           </select>
+        </label>
+        <label id="studentNumWrap" style="display:none">شماره دانش‌آموز (۱–۳۰۰۰)
+          <input type="number" id="studentNum" min="1" max="3000" value="1" step="1">
         </label>
         <label>رمز عبور <input type="password" id="loginPass"></label>
         <button class="btn btn-primary" id="loginBtn" type="button" data-i18n="login">ورود</button>
@@ -309,6 +342,7 @@ background:linear-gradient(135deg,#6b8cff,#9b7dff);border:none;color:#fff;font-s
       <h2 style="margin-top:0" data-i18n="nav_admin">پنل مدیریت</h2>
       <div id="adminLoginGate" class="form-grid" style="max-width:420px">
         <p class="alert warn">ورود مدیر فقط با رمز <code>MANAGER_PASSWORD</code> روی سرور. رمز در مرورگر ذخیره یا نمایش داده نمی‌شود.</p>
+        <div id="managerEnvHint" class="alert warn">در حال بررسی وضعیت رمز مدیر…</div>
         <label>رمز مدیر <input type="password" id="adminPass" autocomplete="current-password"></label>
         <button class="btn btn-primary" id="adminLoginBtn" type="button">ورود به پنل مدیر</button>
         <div id="adminLoginMsg"></div>
@@ -449,7 +483,7 @@ function showPage(id){
   if (id === 'contests') loadContests();
   if (id === 'tickets') renderTickets();
   if (id === 'notifs') loadNotifs();
-  if (id === 'chat') renderMessages();
+  if (id === 'chat') { renderMessages(); refreshMemory(); }
 }
 document.querySelectorAll('.nav button[data-page]').forEach(b => {
   b.addEventListener('click', () => showPage(b.dataset.page));
@@ -487,6 +521,13 @@ async function refreshHealth(){
       $('vidSetup').style.display = 'block';
       $('vidSetup').textContent = 'VIDEO_API_URL / VIDEO_API_KEY تنظیم نشده. تولید ویدئو واقعی غیرفعال است.';
     } else $('vidSetup').style.display = 'none';
+    const mgrMsg = data.managerConfigured
+      ? ['alert ok', 'رمز مدیر (MANAGER_PASSWORD) روی سرور تنظیم شده است.']
+      : ['alert warn', 'MANAGER_PASSWORD تنظیم نشده. در Render → Environment یا فایل .env محلی تنظیم کنید و سرور را دوباره اجرا/دیپلوی کنید.'];
+    ['managerEnvHint', 'managerEnvHintProfile'].forEach(id => {
+      const el = $(id);
+      if (el) { el.className = mgrMsg[0]; el.textContent = mgrMsg[1]; }
+    });
   } catch(e) {
     $('healthText').textContent = 'خطا در اتصال';
   }
@@ -549,8 +590,20 @@ function updateAuthUI(){
   }
 }
 
+$('loginRole').addEventListener('change', () => {
+  const w = $('studentNumWrap');
+  if (w) w.style.display = $('loginRole').value === 'student' ? '' : 'none';
+});
 $('loginBtn').addEventListener('click', async () => {
-  const role = $('loginRole').value;
+  let role = $('loginRole').value;
+  if (role === 'student') {
+    const n = parseInt(($('studentNum') && $('studentNum').value) || '0', 10);
+    if (!n || n < 1 || n > 3000) {
+      $('loginMsg').innerHTML = '<div class="alert err">شماره دانش‌آموز باید بین ۱ و ۳۰۰۰ باشد.</div>';
+      return;
+    }
+    role = 'student' + n;
+  }
   const password = $('loginPass').value;
   $('loginMsg').textContent = '…';
   const {data} = await api('/api/auth/login', {method:'POST', body: JSON.stringify({role, password})});
@@ -652,18 +705,63 @@ async function sendChat(){
   $('sendBtn').disabled = true;
   const history = messages.filter(m => m.role==='user'||m.role==='assistant'||m.role==='bot')
     .slice(0, -1).map(m => ({role: m.role==='bot'?'assistant':m.role, content:m.content}));
+  const webSearch = !!($('webSearchToggle') && $('webSearchToggle').checked);
   const {status, data} = await api('/api/chat', {
     method:'POST',
-    body: JSON.stringify({message: text, history})
+    body: JSON.stringify({message: text, history, webSearch})
   });
   $('sendBtn').disabled = false;
   if (data.ok && data.answer) {
     messages.push({role:'bot', content:data.answer, ts: new Date().toLocaleTimeString('fa-IR',{hour:'2-digit',minute:'2-digit'})});
+    if (data.searchResults && data.searchResults.length) {
+      showSearchPanel(data.searchResults, data.note || '');
+    }
   } else {
     messages.push({role:'bot', content: data.error || 'خطا در دریافت پاسخ', ts: ''});
   }
   renderMessages();
   persistConv();
+}
+
+function showSearchPanel(results, note){
+  const pan = $('searchPanel');
+  if (!pan) return;
+  pan.style.display = '';
+  pan.innerHTML = '<strong>نتایج جست‌وجو</strong>' + (note ? '<p class="small" style="color:var(--muted)">'+escapeHtml(note)+'</p>' : '') +
+    '<ul style="padding-right:18px;margin:8px 0">' +
+    results.map(r => '<li style="margin-bottom:6px"><a href="'+escapeHtml(r.url||'#')+'" target="_blank" rel="noopener">'+escapeHtml(r.title||r.url||'')+'</a>'
+      +(r.snippet?'<div style="font-size:11px;color:var(--muted)">'+escapeHtml(r.snippet)+'</div>':'')+'</li>').join('') +
+    '</ul>';
+}
+
+async function createTextFile(filename, content){
+  const {status, data} = await api('/api/files/create', {
+    method:'POST',
+    body: JSON.stringify({filename: filename || 'kavosh.txt', content: content || ''})
+  });
+  if (data.ok && data.downloadPath) {
+    // fetch blob with auth so download always works
+    try {
+      const headers = {};
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+      const res = await fetch(data.downloadPath, {credentials:'same-origin', headers});
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = data.filename || filename || 'file.txt';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      return {ok:true, filename: data.filename};
+    } catch(e) {
+      // fallback open path
+      window.open(data.downloadPath, '_blank');
+      return {ok:true, filename: data.filename};
+    }
+  }
+  return {ok:false, error: data.error || ('خطا ' + status)};
 }
 
 $('sendBtn').addEventListener('click', sendChat);
@@ -779,9 +877,13 @@ $('cCreate').addEventListener('click', async () => {
 /* plans */
 async function loadPlans(){
   const defaults = [
-    {name:'رایگان', priceLabel:'۰ تومان', features:['چت محدود','دسترسی پایه']},
-    {name:'پلاس', priceLabel:'قابل تنظیم', features:['چت بیشتر','استودیو تصویر']},
-    {name:'حرفه‌ای', priceLabel:'قابل تنظیم', features:['دسترسی کامل','اولویت پشتیبانی']},
+    {name:'پلاس — ۱ ماه', priceLabel:'۵۰٬۰۰۰ کاوش', features:['چت بیشتر','حافظه گفتگو','جست‌وجوی وب محدود']},
+    {name:'پلاس — ۳ ماه', priceLabel:'۱۵۰٬۰۰۰ کاوش', features:['چت بیشتر','حافظه گفتگو','جست‌وجوی وب']},
+    {name:'الماس — ۱ ماه', priceLabel:'۱۲۰٬۰۰۰ کاوش', features:['همه امکانات پلاس','ساخت فایل','اولویت پاسخ']},
+    {name:'الماس — ۳ ماه', priceLabel:'۳۶۰٬۰۰۰ کاوش', features:['همه امکانات پلاس','ساخت فایل']},
+    {name:'الماس — ۶ ماه', priceLabel:'۱٬۰۰۰٬۰۰۰ کاوش', features:['همه امکانات الماس']},
+    {name:'الماس — ۱ سال', priceLabel:'۲٬۰۰۰٬۰۰۰ کاوش', features:['همه امکانات الماس','صرفه‌جویی سالانه']},
+    {name:'الماس — ۵ سال', priceLabel:'۱۰٬۰۰۰٬۰۰۰ کاوش', features:['همه امکانات الماس','بلندمدت']},
   ];
   let plans = defaults;
   try {
@@ -789,9 +891,10 @@ async function loadPlans(){
     if (data.ok && data.plans && data.plans.length) plans = data.plans;
   } catch(e){}
   $('planCards').innerHTML = plans.map(p =>
-    `<div class="card"><h3>${escapeHtml(p.name)}</h3><p style="font-size:18px;font-weight:700">${escapeHtml(p.priceLabel||'')}</p>
+    `<div class="card"><h3>${escapeHtml(p.name)}</h3><p style="font-size:18px;font-weight:700;background:linear-gradient(90deg,var(--blue),var(--violet));-webkit-background-clip:text;-webkit-text-fill-color:transparent">${escapeHtml(p.priceLabel||'')}</p>
+     <p style="font-size:11px;color:var(--muted)">${p.durationDays? (p.durationDays+' روز') : ''}</p>
      <ul style="padding-right:18px;color:var(--muted)">${(p.features||[]).map(f=>'<li>'+escapeHtml(f)+'</li>').join('')}</ul>
-     <button class="btn" type="button" disabled title="درگاه پرداخت پیکربندی نشده">انتخاب پلن</button></div>`
+     <button class="btn" type="button" disabled title="درگاه پرداخت پیکربندی نشده">خرید (به‌زودی)</button></div>`
   ).join('');
 }
 
@@ -867,6 +970,8 @@ async function loadAdmin(){
         <p>مدیر: <span class="badge ${auth.managerConfigured?'good':'bad'}">${auth.managerConfigured?'رمز تنظیم شده':'تنظیم نشده'}</span></p>
         <p>معاون‌ها: ${auth.deputiesConfigured||0}/${auth.deputyCount||8}</p>
         <p>معلم‌ها: ${auth.teachersConfigured||0}/${auth.teacherCount||10}</p>
+        <p>دانش‌آموزان پیکربندی‌شده: ${auth.studentsConfigured||0} / ${auth.studentCount||3000}</p>
+        <p style="font-size:11px;color:var(--muted)">${escapeHtml(auth.studentPasswordNote||'رمز فقط از STUDENT_n_PASSWORD در env')}</p>
         <p style="font-size:11px;color:var(--muted)">${escapeHtml(auth.googleOAuthNote||'')}</p>
         <p style="font-size:11px;color:var(--muted)">${escapeHtml(auth.xaiGrokNote||'')}</p>
       </div>
@@ -930,6 +1035,67 @@ function draw(t){
 }
 window.addEventListener('resize', resize);
 resize(); requestAnimationFrame(draw);
+
+
+
+async function refreshMemory(){
+  const box = $('memoryList');
+  if (!box) return;
+  try {
+    const {data} = await api('/api/memory');
+    if (!data.ok || !(data.notes||[]).length) { box.innerHTML = '<div class="empty">خالی</div>'; return; }
+    box.innerHTML = data.notes.map(n => `<div class="card" style="margin-bottom:6px;padding:10px">${escapeHtml(n.note)}</div>`).join('');
+  } catch(e) { box.innerHTML = '<div class="empty">خطا</div>'; }
+}
+$('memoryAddBtn') && $('memoryAddBtn').addEventListener('click', async () => {
+  const note = ($('memoryInput').value||'').trim();
+  if (!note) return;
+  await api('/api/memory', {method:'POST', body: JSON.stringify({action:'add', note})});
+  $('memoryInput').value = '';
+  refreshMemory();
+});
+$('memoryClearBtn') && $('memoryClearBtn').addEventListener('click', async () => {
+  await api('/api/memory', {method:'POST', body: JSON.stringify({action:'clear'})});
+  refreshMemory();
+});
+$('saveMemoryBtn') && $('saveMemoryBtn').addEventListener('click', async () => {
+  const lastUser = [...messages].reverse().find(m => m.role==='user');
+  if (!lastUser) { alert('پیامی نیست'); return; }
+  await api('/api/memory', {method:'POST', body: JSON.stringify({action:'add', note: lastUser.content.slice(0,500)})});
+  refreshMemory();
+  alert('در حافظه ذخیره شد');
+});
+$('makeFileBtn') && $('makeFileBtn').addEventListener('click', async () => {
+  const lastBot = [...messages].reverse().find(m => m.role==='bot' || m.role==='assistant');
+  if (!lastBot) { alert('اول یک پاسخ از چت بگیرید، یا از بخش «ساخت فایل متنی دلخواه» استفاده کنید.'); return; }
+  const r = await createTextFile('kavosh-response.txt', lastBot.content);
+  if (r.ok) alert('فایل ساخته و دانلود شد: ' + (r.filename||''));
+  else alert(r.error || 'خطا در ساخت فایل');
+});
+$('makeCustomFileBtn') && $('makeCustomFileBtn').addEventListener('click', async () => {
+  const name = ($('fileNameInput').value||'kavosh-note.txt').trim();
+  const content = $('fileContentInput').value||'';
+  if (!content.trim()) { $('fileCreateMsg').innerHTML = '<div class="alert err">متن فایل خالی است</div>'; return; }
+  $('fileCreateMsg').innerHTML = '<div class="alert loading">در حال ساخت…</div>';
+  const r = await createTextFile(name, content);
+  if (r.ok) $('fileCreateMsg').innerHTML = '<div class="alert ok">فایل آماده و دانلود شد</div>';
+  else $('fileCreateMsg').innerHTML = '<div class="alert err">'+escapeHtml(r.error||'خطا')+'</div>';
+});
+$('searchOnlyBtn') && $('searchOnlyBtn').addEventListener('click', async () => {
+  const q = ($('chatInput').value||'').trim();
+  if (!q) { alert('عبارت جست‌وجو را در کادر پیام بنویسید'); return; }
+  const pan = $('searchPanel');
+  if (pan) { pan.style.display=''; pan.innerHTML = '<div class="alert loading">در حال جست‌وجو…</div>'; }
+  const {status, data} = await api('/api/web-search', {method:'POST', body: JSON.stringify({query:q, limit:6})});
+  if (data.ok && data.results && data.results.length) {
+    showSearchPanel(data.results, 'جست‌وجوی مستقیم (بدون نیاز به کلید AI)');
+    messages.push({role:'bot', content: 'نتایج جست‌وجو برای: ' + q + '\n' + data.results.map((r,i)=> (i+1)+'. '+(r.title||'')+'\n'+(r.url||'')).join('\n'), ts:''});
+    renderMessages(); persistConv();
+  } else {
+    if (pan) pan.innerHTML = '<div class="alert err">'+escapeHtml(data.error||'نتیجه‌ای یافت نشد')+'</div>';
+    alert(data.error || 'جست‌وجو نتیجه‌ای نداد');
+  }
+});
 
 
 $('adminLoginBtn').addEventListener('click', async () => {
