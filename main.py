@@ -23,7 +23,10 @@ SESSION_TTL = 8 * 60 * 60
 buckets: dict[str, list[float | int]] = {}
 login_buckets: dict[str, list[float | int]] = {}
 sessions: dict[str, dict[str, object]] = {}
+csrf_tokens: dict[str, float] = {}  # token -> exp
 lock = threading.Lock()
+COOKIE_NAME = "kavosh_session"
+CSRF_COOKIE = "kavosh_csrf"
 
 SYSTEM_PROMPT = """You are Kavosh AI 2 (کاوش AI 2), a thoughtful, capable, Persian-first AI assistant.
 Identity and style:
@@ -331,11 +334,90 @@ def login_rate_allowed(ip: str) -> bool:
         return int(b[1]) <= LOGIN_MAX
 
 
+
+def is_https_request(handler) -> bool:
+    proto = (handler.headers.get("X-Forwarded-Proto") or "").lower()
+    if proto == "https":
+        return True
+    host = handler.headers.get("Host", "")
+    return False  # local http stays non-Secure
+
+def parse_cookies(header: str) -> dict[str, str]:
+    out = {}
+    if not header:
+        return out
+    for part in header.split(";"):
+        if "=" in part:
+            k, v = part.split("=", 1)
+            out[k.strip()] = v.strip()
+    return out
+
+def issue_csrf() -> str:
+    tok = secrets.token_urlsafe(24)
+    with lock:
+        now = time.time()
+        for k, exp in list(csrf_tokens.items()):
+            if exp < now:
+                csrf_tokens.pop(k, None)
+        csrf_tokens[tok] = now + SESSION_TTL
+    return tok
+
+def validate_csrf(token: str | None) -> bool:
+    if not token:
+        return False
+    with lock:
+        exp = csrf_tokens.get(token)
+        if not exp or exp < time.time():
+            csrf_tokens.pop(token, None)
+            return False
+        return True
+
+def public_provider_status() -> dict:
+    """Status for admin UI — never includes secret values."""
+    img_url, img_key, img_model = media_config("تصویر")
+    vid_url, vid_key, vid_model = media_config("ویدئو")
+    return {
+        "chat": {
+            "provider": "openrouter",
+            "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+            "model": MODEL or "(empty)",
+            "keyConfigured": bool(API_KEY),
+            "note": "کلید فقط روی سرور است و به مرورگر فرستاده نمی‌شود.",
+        },
+        "image": {
+            "provider": "configured-media-api" if img_url else "none",
+            "endpointConfigured": bool(img_url),
+            "endpointHost": (urlparse(img_url).netloc if img_url else ""),
+            "model": img_model or "(empty)",
+            "keyConfigured": bool(img_key),
+        },
+        "video": {
+            "provider": "configured-media-api" if vid_url else "none",
+            "endpointConfigured": bool(vid_url),
+            "endpointHost": (urlparse(vid_url).netloc if vid_url else ""),
+            "model": vid_model or "(empty)",
+            "keyConfigured": bool(vid_key),
+        },
+        "auth": {
+            "managerConfigured": bool(os.getenv("MANAGER_PASSWORD")),
+            "deputiesConfigured": configured_deputies(),
+            "deputyCount": 8,
+            "teachersConfigured": configured_teachers(),
+            "teacherCount": 10,
+            "googleOAuth": False,
+            "googleOAuthNote": "OAuth گوگل در این نسخه پیاده‌سازی نشده است.",
+            "xaiGrokDirect": False,
+            "xaiGrokNote": "اتصال مستقیم xAI/Grok در کد نیست؛ چت از OpenRouter است (می‌توان مدل‌های سازگار را در OPENROUTER_MODEL گذاشت).",
+        },
+        "site": {"name": SITE_NAME, "url": SITE_URL, "runtime": "python"},
+    }
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "KavoshAI2-Python"
     def log_message(self, fmt, *args):
         print("%s - %s" % (self.client_address[0], fmt % args))
-    def send_json(self, status, obj):
+    def send_json(self, status, obj, set_cookies=None, clear_cookies=None):
         body = json_bytes(obj)
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -343,6 +425,19 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
+        secure = is_https_request(self)
+        if set_cookies:
+            for name, value, max_age in set_cookies:
+                parts = [f"{name}={value}", "Path=/", "HttpOnly", "SameSite=Lax", f"Max-Age={int(max_age)}"]
+                if secure:
+                    parts.append("Secure")
+                self.send_header("Set-Cookie", "; ".join(parts))
+        if clear_cookies:
+            for name in clear_cookies:
+                parts = [f"{name}=", "Path=/", "HttpOnly", "SameSite=Lax", "Max-Age=0"]
+                if secure:
+                    parts.append("Secure")
+                self.send_header("Set-Cookie", "; ".join(parts))
         self.end_headers()
         self.wfile.write(body)
     def read_json(self, limit=100_000):
@@ -365,6 +460,9 @@ class Handler(BaseHTTPRequestHandler):
             return int(b[1]) <= MAX_REQUESTS
     def session(self):
         token = re.sub(r"^Bearer\s+", "", self.headers.get("Authorization", ""), flags=re.I).strip()
+        if not token:
+            cookies = parse_cookies(self.headers.get("Cookie", ""))
+            token = cookies.get(COOKIE_NAME, "")
         if not token:
             return None
         with lock:
@@ -490,6 +588,18 @@ class Handler(BaseHTTPRequestHandler):
                 "activity": [dict(x) for x in logs],
                 "note": "داشبورد کارکنان — عملیات حساس فقط سمت سرور بررسی می‌شود. OAuth گوگل و پرداخت واقعی فعال نیست.",
             })
+
+        if path == "/api/admin/providers":
+            s = self.session()
+            if not s or not is_staff(str(s.get("role") or "")):
+                return self.send_json(401, {"ok": False, "error": "دسترسی کارکنان لازم است."})
+            return self.send_json(200, {"ok": True, "providers": public_provider_status()})
+        if path == "/api/admin/csrf":
+            s = self.session()
+            if not s or not is_staff(str(s.get("role") or "")):
+                return self.send_json(401, {"ok": False, "error": "ورود لازم است."})
+            csrf = issue_csrf()
+            return self.send_json(200, {"ok": True, "csrf": csrf}, set_cookies=[(CSRF_COOKIE, csrf, SESSION_TTL)])
         if path in ("/api/panel/summary", "/api/panel/summary/"):
             s = self.session()
             if not s: return self.send_json(401, {"ok": False, "error": "ابتدا وارد پنل شو."})
@@ -547,19 +657,26 @@ class Handler(BaseHTTPRequestHandler):
                 now = time.time()
                 persist_session(token, role, now)
                 log_activity(role, "login", ip)
+                csrf = issue_csrf()
                 return self.send_json(200, {
                     "ok": True, "token": token, "role": role,
                     "name": role_label(role), "label": role_label(role),
-                    "expiresIn": SESSION_TTL,
-                })
+                    "expiresIn": SESSION_TTL, "csrf": csrf,
+                }, set_cookies=[
+                    (COOKIE_NAME, token, SESSION_TTL),
+                    (CSRF_COOKIE, csrf, SESSION_TTL),
+                ])
             except ValueError as exc:
                 return self.send_json(400, {"ok": False, "error": str(exc)})
 
         if path == "/api/auth/logout":
             token = self.auth_token()
+            if not token:
+                cookies = parse_cookies(self.headers.get("Cookie", ""))
+                token = cookies.get(COOKIE_NAME, "")
             if token:
                 drop_session(token)
-            return self.send_json(200, {"ok": True})
+            return self.send_json(200, {"ok": True}, clear_cookies=[COOKIE_NAME, CSRF_COOKIE])
 
         if path == "/api/contests":
             s = self.session()
@@ -674,6 +791,49 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(503, {"ok": False, "error": str(exc)[:500], "setupRequired": True})
             except (RuntimeError, TimeoutError, OSError) as exc:
                 return self.send_json(500, {"ok": False, "error": str(exc)[:500]})
+
+
+        if path == "/api/admin/test-connection":
+            s = self.session()
+            if not s or not is_staff(str(s.get("role") or "")):
+                return self.send_json(401, {"ok": False, "error": "دسترسی کارکنان لازم است."})
+            cookies = parse_cookies(self.headers.get("Cookie", ""))
+            csrf_hdr = self.headers.get("X-CSRF-Token", "") or ""
+            csrf_body = ""
+            try:
+                body = self.read_json(5000)
+                csrf_body = str(body.get("csrf") or "")
+            except ValueError:
+                body = {}
+            csrf = csrf_hdr or csrf_body or cookies.get(CSRF_COOKIE, "")
+            if not validate_csrf(csrf):
+                return self.send_json(403, {"ok": False, "error": "توکن CSRF نامعتبر است. صفحه را تازه کنید."})
+            kind = str(body.get("kind") or "chat").strip()
+            if kind == "chat":
+                if not API_KEY:
+                    return self.send_json(200, {"ok": False, "error": "OPENROUTER_API_KEY تنظیم نشده است."})
+                try:
+                    status, data = call_json_api(
+                        "https://openrouter.ai/api/v1/chat/completions", API_KEY,
+                        {"model": MODEL, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 5},
+                        timeout=30,
+                        extra_headers={"HTTP-Referer": SITE_URL, "X-Title": SITE_NAME},
+                    )
+                    if 200 <= status < 300:
+                        return self.send_json(200, {"ok": True, "message": "اتصال OpenRouter برقرار است.", "model": MODEL})
+                    err = (data.get("error") or {}).get("message") if isinstance(data.get("error"), dict) else data.get("error")
+                    return self.send_json(200, {"ok": False, "error": str(err or f"HTTP {status}")[:300]})
+                except Exception as exc:
+                    return self.send_json(200, {"ok": False, "error": str(exc)[:300]})
+            if kind == "image":
+                if not all(media_config("تصویر")):
+                    return self.send_json(200, {"ok": False, "error": "IMAGE_API_URL / KEY / MODEL کامل نیست."})
+                return self.send_json(200, {"ok": True, "message": "متغیرهای تصویر روی سرور تنظیم شده‌اند (بدون ارسال درخواست واقعی به ارائه‌دهنده در این تست سبک)."})
+            if kind == "video":
+                if not all(media_config("ویدئو")):
+                    return self.send_json(200, {"ok": False, "error": "VIDEO_API_URL / KEY / MODEL کامل نیست."})
+                return self.send_json(200, {"ok": True, "message": "متغیرهای ویدئو روی سرور تنظیم شده‌اند (بدون ارسال درخواست واقعی به ارائه‌دهنده در این تست سبک)."})
+            return self.send_json(400, {"ok": False, "error": "kind نامعتبر است."})
 
         if path == "/api/chat":
             if not self.rate_allowed(): return self.send_json(429, {"ok": False, "error": "درخواست‌ها خیلی زیاد شده‌اند؛ یک دقیقه بعد دوباره تلاش کن."})
