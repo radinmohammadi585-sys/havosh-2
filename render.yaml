@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: kavosh-ai-2-python
+    runtime: python
+    plan: free
+    buildCommand: ""
+    startCommand: python main.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: OPENROUTER_MODEL
+        value: openrouter/auto
+      - key: SITE_NAME
+        value: Kavosh AI 2
