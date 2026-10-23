@@ -515,7 +515,7 @@ async function refreshHealth(){
     } else $('chatSetup').style.display = 'none';
     if (!data.imageConfigured) {
       $('imgSetup').style.display = 'block';
-      $('imgSetup').textContent = 'IMAGE_API_URL / IMAGE_API_KEY تنظیم نشده. تولید تصویر واقعی غیرفعال است.';
+      $('imgSetup').textContent = 'IMAGE_API_URL و IMAGE_API_KEY و IMAGE_MODEL را فقط در .env یا Environment سرور تنظیم کنید (نه در مرورگر).';
     } else $('imgSetup').style.display = 'none';
     if (!data.videoConfigured) {
       $('vidSetup').style.display = 'block';
