@@ -513,10 +513,15 @@ async function refreshHealth(){
       $('chatSetup').style.display = 'block';
       $('chatSetup').textContent = 'کلید OPENROUTER_API_KEY تنظیم نشده. چت واقعی فعال نیست.';
     } else $('chatSetup').style.display = 'none';
-    if (!data.imageConfigured) {
+    if (data.imageProvider === 'local-svg' || !data.imageConfigured) {
       $('imgSetup').style.display = 'block';
-      $('imgSetup').textContent = 'IMAGE_API_URL و IMAGE_API_KEY و IMAGE_MODEL را فقط در .env یا Environment سرور تنظیم کنید (نه در مرورگر).';
-    } else $('imgSetup').style.display = 'none';
+      $('imgSetup').className = 'alert ok';
+      $('imgSetup').textContent = 'موتور محلی تصویر فعال است (بدون نیاز به API). با تنظیم IMAGE_API_* از سرویس ابری استفاده می‌شود.';
+    } else {
+      $('imgSetup').style.display = 'block';
+      $('imgSetup').className = 'alert ok';
+      $('imgSetup').textContent = 'تصویر از API ابری (IMAGE_API_*) فعال است.';
+    }
     if (!data.videoConfigured) {
       $('vidSetup').style.display = 'block';
       $('vidSetup').textContent = 'VIDEO_API_URL / VIDEO_API_KEY تنظیم نشده. تولید ویدئو واقعی غیرفعال است.';
