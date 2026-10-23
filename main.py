@@ -226,16 +226,65 @@ def svg_to_data_url(svg: str) -> str:
 
 
 
+def enhance_image_prompt(prompt: str) -> str:
+    """Make short/Persian prompts usable for English-centric image models."""
+    text = (prompt or "").strip()
+    if not text:
+        return "cinematic deep space nebula, stars, ultra detailed"
+    # Common Persian topic hints -> English visual phrases
+    mapping = [
+        ("جهان", "the universe, deep space, galaxies, nebula, cosmic vista"),
+        ("کهکشان", "galaxy, spiral arms, stars, nebula"),
+        ("فضا", "outer space, stars, planets, cosmic background"),
+        ("ستاره", "bright stars in the night sky, astronomy"),
+        ("ماه", "the moon, lunar surface, night sky"),
+        ("خورشید", "the sun, solar flares, space"),
+        ("دریا", "ocean waves, seascape, dramatic light"),
+        ("کوه", "mountain landscape, dramatic peaks"),
+        ("جنگل", "dense forest, sunlight through trees"),
+        ("شهر", "futuristic city skyline at night"),
+        ("ربات", "advanced robot, sci-fi character design"),
+        ("انسان", "person, portrait, realistic lighting"),
+        ("گربه", "cat, detailed fur, photo realistic"),
+        ("سگ", "dog, detailed, photo realistic"),
+        ("گل", "flowers, botanical, soft light"),
+        ("آتش", "fire, flames, dramatic"),
+        ("آب", "water, reflections, fluid"),
+        ("آسمان", "sky, clouds, atmosphere"),
+        ("شب", "night scene, moonlight"),
+        ("روز", "daylight scene, sunny"),
+    ]
+    extra = []
+    for fa, en in mapping:
+        if fa in text:
+            extra.append(en)
+    # If text has Arabic/Persian letters, wrap as subject description
+    has_fa = any("؀" <= ch <= "ۿ" for ch in text)
+    if has_fa:
+        core = ", ".join(extra) if extra else f"an artistic depiction of the concept: {text}"
+        return (
+            f"{core}, highly detailed, cinematic lighting, 8k concept art, "
+            f"masterpiece composition, no random face unless asked"
+        )
+    # English / mixed: still boost quality a bit
+    base = text
+    if extra:
+        base = text + ", " + ", ".join(extra)
+    if len(base) < 40:
+        base += ", highly detailed, cinematic lighting, sharp focus"
+    return base[:800]
+
+
 def generate_image_without_user_key(prompt: str) -> dict:
     """Real AI image via public Pollinations endpoint (no API key required).
     Falls back to local SVG if the network call fails.
     """
     from urllib.parse import quote
-    text = (prompt or "cosmic art").strip()[:500] or "cosmic art"
+    raw = (prompt or "cosmic art").strip()[:500] or "cosmic art"
+    text = enhance_image_prompt(raw)
     # Pollinations public image API — no key; returns image bytes
-    # seed from prompt for some stability
     import hashlib
-    seed = int(hashlib.md5(text.encode("utf-8")).hexdigest()[:8], 16) % 999999
+    seed = int(hashlib.md5(raw.encode("utf-8")).hexdigest()[:8], 16) % 999999
     path = quote(text, safe="")
     url = (
         "https://image.pollinations.ai/prompt/"
@@ -264,7 +313,9 @@ def generate_image_without_user_key(prompt: str) -> dict:
             "url": data_url,
             "dataUrl": data_url,
             "provider": "pollinations",
-            "message": "تصویر با موتور AI عمومی ساخته شد (بدون نیاز به کلید شما).",
+            "message": "تصویر با موتور AI عمومی ساخته شد (بدون کلید شما).",
+            "enhancedPrompt": text,
+            "originalPrompt": raw,
         }
     except Exception as exc:
         # offline fallback
