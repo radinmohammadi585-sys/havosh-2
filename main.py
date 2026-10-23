@@ -6,16 +6,22 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 from pathlib import Path
+import sqlite3
 
 ROOT = Path(__file__).resolve().parent
 PUBLIC = ROOT / "public"
+DATA_DIR = ROOT / "data"
+DB_PATH = DATA_DIR / "kavosh.db"
 PORT = int(os.getenv("PORT", "3000"))
 API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
 MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/auto").strip()
 SITE_URL = os.getenv("SITE_URL", "https://example.com").strip()
 SITE_NAME = os.getenv("SITE_NAME", "Kavosh AI 2").strip()
-WINDOW_SECONDS, MAX_REQUESTS = 60, 20
+WINDOW_SECONDS, MAX_REQUESTS = 60, 30
+LOGIN_WINDOW, LOGIN_MAX = 300, 8  # 8 login attempts / 5 min per IP
+SESSION_TTL = 8 * 60 * 60
 buckets: dict[str, list[float | int]] = {}
+login_buckets: dict[str, list[float | int]] = {}
 sessions: dict[str, dict[str, object]] = {}
 lock = threading.Lock()
 
@@ -137,6 +143,194 @@ def configured_deputies():
 def configured_teachers():
     return sum(bool(os.getenv(f"TEACHER_{i}_PASSWORD")) for i in range(1, 11))
 
+
+def db():
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(DB_PATH), check_same_thread=False, timeout=30)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=DELETE")
+    conn.execute("PRAGMA foreign_keys=ON")
+    return conn
+
+def init_db():
+    with lock:
+        conn = db()
+        try:
+            conn.executescript("""
+            CREATE TABLE IF NOT EXISTS sessions (
+                token TEXT PRIMARY KEY,
+                role TEXT NOT NULL,
+                created REAL NOT NULL,
+                last_seen REAL NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS plans (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                price_label TEXT NOT NULL,
+                duration_days INTEGER NOT NULL,
+                features TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE IF NOT EXISTS contests (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT,
+                category TEXT,
+                rules TEXT,
+                status TEXT NOT NULL DEFAULT 'upcoming',
+                start_at INTEGER,
+                end_at INTEGER,
+                created_by TEXT,
+                created_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS contest_regs (
+                contest_id TEXT NOT NULL,
+                user_key TEXT NOT NULL,
+                registered_at INTEGER NOT NULL,
+                PRIMARY KEY (contest_id, user_key)
+            );
+            CREATE TABLE IF NOT EXISTS notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_key TEXT NOT NULL,
+                title TEXT NOT NULL,
+                body TEXT NOT NULL,
+                read_flag INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS tickets (
+                id TEXT PRIMARY KEY,
+                user_key TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                category TEXT,
+                description TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'open',
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS activity_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                actor TEXT,
+                action TEXT,
+                detail TEXT,
+                created_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS media_jobs (
+                id TEXT PRIMARY KEY,
+                kind TEXT NOT NULL,
+                user_key TEXT,
+                prompt TEXT,
+                status TEXT,
+                result_url TEXT,
+                error TEXT,
+                raw_note TEXT,
+                created_at INTEGER NOT NULL
+            );
+            """)
+            if conn.execute("SELECT COUNT(*) AS c FROM plans").fetchone()["c"] == 0:
+                conn.executemany(
+                    "INSERT INTO plans (id, name, price_label, duration_days, features, active) VALUES (?,?,?,?,?,1)",
+                    [
+                        ("free", "رایگان", "۰ تومان", 0, json.dumps(["چت محدود", "دسترسی پایه"], ensure_ascii=False)),
+                        ("plus", "پلاس", "قابل تنظیم", 30, json.dumps(["چت بیشتر", "استودیو تصویر"], ensure_ascii=False)),
+                        ("pro", "حرفه‌ای", "قابل تنظیم", 30, json.dumps(["دسترسی کامل", "اولویت پشتیبانی"], ensure_ascii=False)),
+                    ],
+                )
+            conn.commit()
+            # hydrate in-memory sessions from DB
+            now = time.time()
+            rows = conn.execute("SELECT token, role, created, last_seen FROM sessions").fetchall()
+            for r in rows:
+                if now - float(r["last_seen"]) > SESSION_TTL:
+                    conn.execute("DELETE FROM sessions WHERE token=?", (r["token"],))
+                else:
+                    sessions[r["token"]] = {"role": r["role"], "created": float(r["created"]), "last_seen": float(r["last_seen"])}
+            conn.commit()
+        finally:
+            conn.close()
+
+def log_activity(actor: str, action: str, detail: str = ""):
+    try:
+        with lock:
+            conn = db()
+            try:
+                conn.execute(
+                    "INSERT INTO activity_log (actor, action, detail, created_at) VALUES (?,?,?,?)",
+                    (actor, action, (detail or "")[:500], int(time.time())),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+    except Exception:
+        pass
+
+def persist_session(token: str, role: str, created: float):
+    with lock:
+        sessions[token] = {"role": role, "created": created, "last_seen": created}
+        conn = db()
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO sessions (token, role, created, last_seen) VALUES (?,?,?,?)",
+                (token, role, created, created),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+def touch_session(token: str):
+    now = time.time()
+    with lock:
+        s = sessions.get(token)
+        if not s:
+            return
+        s["last_seen"] = now
+        conn = db()
+        try:
+            conn.execute("UPDATE sessions SET last_seen=? WHERE token=?", (now, token))
+            conn.commit()
+        finally:
+            conn.close()
+
+def drop_session(token: str):
+    with lock:
+        sessions.pop(token, None)
+        conn = db()
+        try:
+            conn.execute("DELETE FROM sessions WHERE token=?", (token,))
+            conn.commit()
+        finally:
+            conn.close()
+
+def role_label(role: str) -> str:
+    if role == "manager":
+        return "مدیر"
+    m = re.fullmatch(r"deputy([1-8])", role or "")
+    if m:
+        return f"معاون {m.group(1)}"
+    m = re.fullmatch(r"teacher([1-9]|10)", role or "")
+    if m:
+        return f"معلم {m.group(1)}"
+    return role or "کاربر"
+
+def is_staff(role: str) -> bool:
+    return bool(role == "manager" or re.fullmatch(r"deputy[1-8]", role or "") or re.fullmatch(r"teacher(?:[1-9]|10)", role or ""))
+
+def is_admin(role: str) -> bool:
+    return bool(role == "manager" or re.fullmatch(r"deputy[1-8]", role or ""))
+
+def login_rate_allowed(ip: str) -> bool:
+    now = time.time()
+    with lock:
+        b = login_buckets.get(ip)
+        if not b or now - float(b[0]) > LOGIN_WINDOW:
+            b = [now, 0]
+        b[1] = int(b[1]) + 1
+        login_buckets[ip] = b
+        for k in list(login_buckets):
+            if now - float(login_buckets[k][0]) > LOGIN_WINDOW:
+                login_buckets.pop(k, None)
+        return int(b[1]) <= LOGIN_MAX
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "KavoshAI2-Python"
     def log_message(self, fmt, *args):
@@ -171,12 +365,39 @@ class Handler(BaseHTTPRequestHandler):
             return int(b[1]) <= MAX_REQUESTS
     def session(self):
         token = re.sub(r"^Bearer\s+", "", self.headers.get("Authorization", ""), flags=re.I).strip()
+        if not token:
+            return None
         with lock:
             s = sessions.get(token)
-            if not s: return None
-            if time.time() - float(s["created"]) > 8 * 60 * 60:
-                sessions.pop(token, None); return None
+            if not s:
+                return None
+            now = time.time()
+            last = float(s.get("last_seen") or s.get("created") or 0)
+            if now - last > SESSION_TTL:
+                sessions.pop(token, None)
+                try:
+                    conn = db()
+                    try:
+                        conn.execute("DELETE FROM sessions WHERE token=?", (token,))
+                        conn.commit()
+                    finally:
+                        conn.close()
+                except Exception:
+                    pass
+                return None
+            s["last_seen"] = now
+            try:
+                conn = db()
+                try:
+                    conn.execute("UPDATE sessions SET last_seen=? WHERE token=?", (now, token))
+                    conn.commit()
+                finally:
+                    conn.close()
+            except Exception:
+                pass
             return s
+    def auth_token(self):
+        return re.sub(r"^Bearer\s+", "", self.headers.get("Authorization", ""), flags=re.I).strip()
     def do_GET(self):
         path = urlparse(self.path).path
         if path == "/api/health":
@@ -186,6 +407,88 @@ class Handler(BaseHTTPRequestHandler):
                 "videoConfigured": all(media_config("ویدئو")), "managerConfigured": bool(os.getenv("MANAGER_PASSWORD")),
                 "deputiesConfigured": configured_deputies(), "deputyCount": 8,
                 "teachersConfigured": configured_teachers(), "teacherCount": 10
+            })
+        if path == "/api/me":
+            s = self.session()
+            if not s:
+                return self.send_json(200, {"ok": True, "authenticated": False})
+            role = str(s.get("role") or "")
+            return self.send_json(200, {
+                "ok": True, "authenticated": True,
+                "role": role, "name": role_label(role), "label": role_label(role),
+            })
+        if path == "/api/plans":
+            with lock:
+                conn = db()
+                try:
+                    rows = conn.execute(
+                        "SELECT id, name, price_label, duration_days, features FROM plans WHERE active=1 ORDER BY duration_days"
+                    ).fetchall()
+                    plans = [{
+                        "id": r["id"], "name": r["name"], "priceLabel": r["price_label"],
+                        "durationDays": r["duration_days"],
+                        "features": json.loads(r["features"] or "[]"),
+                    } for r in rows]
+                finally:
+                    conn.close()
+            return self.send_json(200, {"ok": True, "plans": plans})
+        if path == "/api/contests":
+            from urllib.parse import parse_qs
+            qs = parse_qs(urlparse(self.path).query)
+            status_f = (qs.get("status") or [""])[0]
+            with lock:
+                conn = db()
+                try:
+                    if status_f in ("upcoming", "active", "completed"):
+                        rows = conn.execute(
+                            "SELECT * FROM contests WHERE status=? ORDER BY created_at DESC", (status_f,)
+                        ).fetchall()
+                    else:
+                        rows = conn.execute("SELECT * FROM contests ORDER BY created_at DESC").fetchall()
+                    items = [dict(r) for r in rows]
+                finally:
+                    conn.close()
+            return self.send_json(200, {"ok": True, "contests": items})
+        if path == "/api/notifications":
+            s = self.session()
+            user_key = str(s["role"]) if s else "guest"
+            with lock:
+                conn = db()
+                try:
+                    rows = conn.execute(
+                        "SELECT id, title, body, read_flag, created_at FROM notifications "
+                        "WHERE user_key IN (?, 'all') ORDER BY created_at DESC LIMIT 50",
+                        (user_key,),
+                    ).fetchall()
+                    notes = [dict(r) for r in rows]
+                finally:
+                    conn.close()
+            return self.send_json(200, {"ok": True, "notifications": notes})
+        if path == "/api/admin/summary":
+            s = self.session()
+            if not s or not is_staff(str(s.get("role") or "")):
+                return self.send_json(401, {"ok": False, "error": "ابتدا با نقش کارکنان وارد شو."})
+            role = str(s.get("role") or "")
+            with lock:
+                conn = db()
+                try:
+                    open_tickets = conn.execute(
+                        "SELECT COUNT(*) AS c FROM tickets WHERE status='open'"
+                    ).fetchone()["c"]
+                    contests = conn.execute("SELECT COUNT(*) AS c FROM contests").fetchone()["c"]
+                    logs = conn.execute(
+                        "SELECT actor, action, detail, created_at FROM activity_log ORDER BY id DESC LIMIT 20"
+                    ).fetchall()
+                finally:
+                    conn.close()
+            return self.send_json(200, {
+                "ok": True, "role": role, "name": role_label(role), "label": role_label(role),
+                "keyConfigured": bool(API_KEY),
+                "imageConfigured": all(media_config("تصویر")),
+                "videoConfigured": all(media_config("ویدئو")),
+                "openTickets": open_tickets, "contests": contests,
+                "activity": [dict(x) for x in logs],
+                "note": "داشبورد کارکنان — عملیات حساس فقط سمت سرور بررسی می‌شود. OAuth گوگل و پرداخت واقعی فعال نیست.",
             })
         if path in ("/api/panel/summary", "/api/panel/summary/"):
             s = self.session()
@@ -214,26 +517,164 @@ class Handler(BaseHTTPRequestHandler):
                 "note": "این داشبورد وضعیت سرویس و تنظیمات را نشان می‌دهد. مدیریت واقعی دانش‌آموزان، نمره‌ها و حضورغیاب هنوز پیاده‌سازی نشده است."})
         if path == "/api/auth/login":
             try:
-                body = self.read_json(5000); role = str(body.get("role", "")); password = str(body.get("password", ""))
-                env_name = "MANAGER_PASSWORD" if role == "manager" else (f"DEPUTY_{role[6:]}_PASSWORD" if re.fullmatch(r"deputy[1-8]", role) else "DEPUTY_PASSWORD" if role == "deputy" else (f"TEACHER_{role[7:]}_PASSWORD" if re.fullmatch(r"teacher(?:[1-9]|10)", role) else ""))
-                expected = os.getenv(env_name, "") if env_name else ""
-                if not expected: return self.send_json(503, {"ok": False, "error": "رمز این نقش هنوز در تنظیمات خصوصی سرور تنظیم نشده است."})
-                if not hmac.compare_digest(password.encode(), expected.encode()): return self.send_json(401, {"ok": False, "error": "رمز عبور درست نیست."})
-                token = secrets.token_hex(32)
-                with lock: sessions[token] = {"role": role, "created": time.time()}
-                return self.send_json(200, {"ok": True, "token": token, "role": role, "expiresIn": 28800})
-            except ValueError as exc: return self.send_json(400, {"ok": False, "error": str(exc)})
+                if not self.rate_allowed():
+                    return self.send_json(429, {"ok": False, "error": "تعداد درخواست‌ها زیاد است. کمی بعد تلاش کن."})
+                ip = self.headers.get("X-Forwarded-For", self.client_address[0]).split(",")[0].strip()
+                if not login_rate_allowed(ip):
+                    return self.send_json(429, {"ok": False, "error": "تلاش ورود بیش از حد. چند دقیقه صبر کن."})
+                body = self.read_json(5000)
+                role = str(body.get("role", "")).strip()
+                password = str(body.get("password", ""))
+                if role == "manager":
+                    expected = os.getenv("MANAGER_PASSWORD", "")
+                elif re.fullmatch(r"deputy[1-8]", role):
+                    expected = os.getenv(f"DEPUTY_{role[6:]}_PASSWORD", "")
+                    if not expected and role == "deputy1":
+                        expected = os.getenv("DEPUTY_PASSWORD", "")
+                elif role == "deputy":
+                    role = "deputy1"
+                    expected = os.getenv("DEPUTY_1_PASSWORD", "") or os.getenv("DEPUTY_PASSWORD", "")
+                elif re.fullmatch(r"teacher(?:[1-9]|10)", role):
+                    expected = os.getenv(f"TEACHER_{role[7:]}_PASSWORD", "")
+                else:
+                    expected = ""
+                if not expected:
+                    return self.send_json(400, {"ok": False, "error": "این نقش در سرور پیکربندی نشده یا رمز برای آن تنظیم نشده است."})
+                if not password or not hmac.compare_digest(password, expected):
+                    log_activity(role or "unknown", "login_fail", ip)
+                    return self.send_json(401, {"ok": False, "error": "رمز عبور درست نیست."})
+                token = secrets.token_urlsafe(32)
+                now = time.time()
+                persist_session(token, role, now)
+                log_activity(role, "login", ip)
+                return self.send_json(200, {
+                    "ok": True, "token": token, "role": role,
+                    "name": role_label(role), "label": role_label(role),
+                    "expiresIn": SESSION_TTL,
+                })
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+
         if path == "/api/auth/logout":
-            token = re.sub(r"^Bearer\s+", "", self.headers.get("Authorization", ""), flags=re.I).strip()
-            with lock: sessions.pop(token, None)
+            token = self.auth_token()
+            if token:
+                drop_session(token)
             return self.send_json(200, {"ok": True})
-        if path in ("/api/image", "/api/video"):
-            if not self.rate_allowed(): return self.send_json(429, {"ok": False, "error": "درخواست‌ها زیاد شده‌اند؛ کمی بعد دوباره تلاش کن."})
+
+        if path == "/api/contests":
+            s = self.session()
+            if not s or not is_admin(str(s.get("role") or "")):
+                return self.send_json(403, {"ok": False, "error": "فقط مدیر یا معاون می‌تواند مسابقه بسازد."})
             try:
-                body = self.read_json(12000); prompt = str(body.get("prompt", "")).strip()[:4000]
-                if not prompt: return self.send_json(400, {"ok": False, "error": "توضیح خروجی را بنویس."})
-                return self.send_json(200, call_media("تصویر" if path.endswith("/image") else "ویدئو", prompt))
-            except (ValueError, RuntimeError) as exc: return self.send_json(500, {"ok": False, "error": str(exc)[:500]})
+                body = self.read_json(50_000)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+            title = str(body.get("title", "")).strip()[:200]
+            description = str(body.get("description", "")).strip()[:4000]
+            rules = str(body.get("rules", "")).strip()[:4000]
+            category = str(body.get("category", "عمومی")).strip()[:80]
+            status = str(body.get("status") or "upcoming")
+            if status not in ("upcoming", "active", "completed"):
+                status = "upcoming"
+            if not title:
+                return self.send_json(400, {"ok": False, "error": "عنوان لازم است."})
+            cid = "C-" + secrets.token_hex(4).upper()
+            now = int(time.time())
+            with lock:
+                conn = db()
+                try:
+                    conn.execute(
+                        "INSERT INTO contests (id, title, description, category, rules, status, start_at, end_at, created_by, created_at) "
+                        "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                        (cid, title, description, category, rules, status, now, now + 7*86400, str(s["role"]), now),
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
+            log_activity(str(s["role"]), "contest_create", cid)
+            return self.send_json(200, {"ok": True, "id": cid})
+        if path == "/api/tickets":
+            s = self.session()
+            if not s:
+                return self.send_json(401, {"ok": False, "error": "ورود لازم است."})
+            try:
+                body = self.read_json(50_000)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+            subject = str(body.get("subject", "")).strip()[:200]
+            category = str(body.get("category", "عمومی")).strip()[:80]
+            description = str(body.get("description", "")).strip()[:4000]
+            if not subject or not description:
+                return self.send_json(400, {"ok": False, "error": "موضوع و توضیحات الزامی است."})
+            tid = "T-" + secrets.token_hex(4).upper()
+            now = int(time.time())
+            with lock:
+                conn = db()
+                try:
+                    conn.execute(
+                        "INSERT INTO tickets (id, user_key, subject, category, description, status, created_at, updated_at) VALUES (?,?,?,?,?,'open',?,?)",
+                        (tid, str(s["role"]), subject, category, description, now, now),
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
+            log_activity(str(s["role"]), "ticket_create", tid)
+            return self.send_json(200, {"ok": True, "id": tid})
+        if path in ("/api/image", "/api/video"):
+            if not self.rate_allowed():
+                return self.send_json(429, {"ok": False, "error": "تعداد درخواست‌ها زیاد است."})
+            kind = "تصویر" if path.endswith("image") else "ویدئو"
+            try:
+                body = self.read_json(20_000)
+                prompt = str(body.get("prompt", "")).strip()[:1500]
+                if not prompt:
+                    return self.send_json(400, {"ok": False, "error": "پرامپت لازم است."})
+                s = self.session()
+                user_key = str(s["role"]) if s else "guest"
+                job_id = secrets.token_hex(8)
+                with lock:
+                    conn = db()
+                    try:
+                        conn.execute(
+                            "INSERT INTO media_jobs (id, kind, user_key, prompt, status, created_at) VALUES (?,?,?,?,'pending',?)",
+                            (job_id, kind, user_key, prompt, int(time.time())),
+                        )
+                        conn.commit()
+                    finally:
+                        conn.close()
+                result = call_media(kind, prompt)
+                # normalize
+                out = {"ok": True, "jobId": job_id, "provider": result.get("provider", "configured-media-api")}
+                if result.get("url"):
+                    out["url"] = result["url"]
+                    status = "done"
+                elif result.get("dataUrl"):
+                    out["url"] = result["dataUrl"]
+                    out["dataUrl"] = result["dataUrl"]
+                    status = "done"
+                elif result.get("taskId"):
+                    out["taskId"] = result["taskId"]
+                    out["status"] = result.get("status", "submitted")
+                    out["message"] = result.get("message") or "درخواست ثبت شد؛ نتیجه نهایی ممکن است نیاز به polling داشته باشد."
+                    status = "submitted"
+                else:
+                    status = "error"
+                with lock:
+                    conn = db()
+                    try:
+                        conn.execute(
+                            "UPDATE media_jobs SET status=?, result_url=?, raw_note=? WHERE id=?",
+                            (status, out.get("url") or "", str(result)[:500], job_id),
+                        )
+                        conn.commit()
+                    finally:
+                        conn.close()
+                return self.send_json(200, out)
+            except ValueError as exc:
+                return self.send_json(503, {"ok": False, "error": str(exc)[:500], "setupRequired": True})
+            except (RuntimeError, TimeoutError, OSError) as exc:
+                return self.send_json(500, {"ok": False, "error": str(exc)[:500]})
+
         if path == "/api/chat":
             if not self.rate_allowed(): return self.send_json(429, {"ok": False, "error": "درخواست‌ها خیلی زیاد شده‌اند؛ یک دقیقه بعد دوباره تلاش کن."})
             try:
@@ -265,8 +706,10 @@ class Handler(BaseHTTPRequestHandler):
         return self.send_json(404, {"ok": False, "error": "مسیر پیدا نشد."})
 
 def main():
+    init_db()
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     print(f"{SITE_NAME} server listening on port {PORT}")
+    print(f"DB: {DB_PATH}")
     server.serve_forever()
 
 if __name__ == "__main__":
