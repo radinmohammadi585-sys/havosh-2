@@ -137,14 +137,27 @@ def call_json_api(url: str, key: str, payload: dict, timeout=60, extra_headers=N
         raise RuntimeError("ارتباط با سرویس بیرونی برقرار نشد؛ اتصال و تنظیمات API را بررسی کن.") from exc
 
 def media_config(kind):
+    """Read media credentials ONLY from process environment / .env — never from client body or DB."""
     prefix = "IMAGE" if kind == "تصویر" else "VIDEO"
-    return (os.getenv(f"{prefix}_API_URL", "").strip(), os.getenv(f"{prefix}_API_KEY", "").strip(), os.getenv(f"{prefix}_MODEL", "").strip())
+    # Always live-read os.environ (after load_env_file at startup). No hardcoded secrets.
+    url = (os.environ.get(f"{prefix}_API_URL") or "").strip()
+    key = (os.environ.get(f"{prefix}_API_KEY") or "").strip()
+    model = (os.environ.get(f"{prefix}_MODEL") or "").strip()
+    return url, key, model
 
-def call_media(kind, prompt):
+def call_media(kind, prompt, client_overrides=None):
+    # Explicitly ignore any client-supplied url/key/model
+    if client_overrides:
+        for bad in ("apiKey", "api_key", "key", "url", "endpoint", "model", "IMAGE_API_KEY", "VIDEO_API_KEY"):
+            if bad in client_overrides:
+                pass  # discarded
     endpoint, key, model = media_config(kind)
     if not endpoint or not key or not model:
         names = "IMAGE_API_URL، IMAGE_API_KEY و IMAGE_MODEL" if kind == "تصویر" else "VIDEO_API_URL، VIDEO_API_KEY و VIDEO_MODEL"
-        raise ValueError(f"برای ساخت {kind} باید {names} در تنظیمات خصوصی سرور تنظیم شوند. این بخش تا آن زمان فعال نیست.")
+        raise ValueError(
+            f"برای ساخت {kind} باید {names} فقط در فایل .env یا Environment سرور تنظیم شوند. "
+            "کلید از مرورگر یا بدنهٔ درخواست خوانده نمی‌شود."
+        )
     if urlparse(endpoint).scheme not in ("https", "http"):
         raise ValueError("آدرس API رسانه معتبر نیست.")
     status, data = call_json_api(endpoint, key, {"model": model, "prompt": prompt}, timeout=120)
@@ -999,6 +1012,11 @@ class Handler(BaseHTTPRequestHandler):
             kind = "تصویر" if path.endswith("image") else "ویدئو"
             try:
                 body = self.read_json(20_000)
+                # Security: never accept credentials from the client
+                for forbidden in ("apiKey", "api_key", "key", "token", "url", "endpoint", "model",
+                                  "IMAGE_API_KEY", "IMAGE_API_URL", "IMAGE_MODEL",
+                                  "VIDEO_API_KEY", "VIDEO_API_URL", "VIDEO_MODEL"):
+                    body.pop(forbidden, None)
                 prompt = str(body.get("prompt", "")).strip()[:1500]
                 if not prompt:
                     return self.send_json(400, {"ok": False, "error": "پرامپت لازم است."})
