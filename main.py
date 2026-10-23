@@ -8,6 +8,27 @@ from urllib.request import Request, urlopen
 from pathlib import Path
 import sqlite3
 
+
+def load_env_file(path: Path) -> None:
+    """Optional local .env for development. Does not override existing env vars."""
+    if not path.is_file():
+        return
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key = key.strip()
+        val = val.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = val
+
+load_env_file(Path(__file__).resolve().parent / ".env")
+
 ROOT = Path(__file__).resolve().parent
 PUBLIC = ROOT / "public"
 DATA_DIR = ROOT / "data"
@@ -20,6 +41,7 @@ SITE_NAME = os.getenv("SITE_NAME", "Kavosh AI 2").strip()
 WINDOW_SECONDS, MAX_REQUESTS = 60, 30
 LOGIN_WINDOW, LOGIN_MAX = 300, 8  # 8 login attempts / 5 min per IP
 SESSION_TTL = 8 * 60 * 60
+STUDENT_MAX = 3000  # student1 .. student3000 from env only
 buckets: dict[str, list[float | int]] = {}
 login_buckets: dict[str, list[float | int]] = {}
 sessions: dict[str, dict[str, object]] = {}
@@ -141,10 +163,72 @@ def call_media(kind, prompt):
     if task_id: return {"ok": True, "taskId": task_id, "status": data.get("status", "submitted"), "message": "درخواست ثبت شد؛ دریافت نتیجه ممکن است به API بررسی وضعیت نیاز داشته باشد."}
     raise RuntimeError("قالب پاسخ این ارائه‌دهنده با نسخهٔ فعلی سازگار نیست.")
 
+
+def web_search(query: str, limit: int = 5) -> list[dict]:
+    """Lightweight web search via DuckDuckGo HTML (no API key). Best-effort."""
+    q = (query or "").strip()[:200]
+    if not q:
+        return []
+    from urllib.parse import quote_plus
+    url = "https://html.duckduckgo.com/html/?q=" + quote_plus(q)
+    req = Request(url, headers={"User-Agent": "KavoshAI2/2.0 (+https://example.local)"}, method="GET")
+    try:
+        with urlopen(req, timeout=12) as resp:
+            html = resp.read(400_000).decode("utf-8", errors="replace")
+    except Exception as exc:
+        raise RuntimeError(f"جست‌وجوی وب ناموفق: {exc}") from exc
+    results = []
+    # result links: class result__a
+    for m in re.finditer(r'class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', html, re.I | re.S):
+        href, title = m.group(1), re.sub(r"<[^>]+>", "", m.group(2))
+        title = re.sub(r"\s+", " ", title).strip()
+        # duckduckgo redirect links
+        if "uddg=" in href:
+            from urllib.parse import parse_qs, urlparse as up
+            qs = parse_qs(up(href).query)
+            href = (qs.get("uddg") or [href])[0]
+        if not title or not href.startswith("http"):
+            continue
+        results.append({"title": title[:200], "url": href[:500]})
+        if len(results) >= limit:
+            break
+    if not results:
+        # fallback snippet from instant answer API
+        try:
+            ia = "https://api.duckduckgo.com/?q=" + quote_plus(q) + "&format=json&no_html=1&skip_disambig=1"
+            with urlopen(Request(ia, headers={"User-Agent": "KavoshAI2/2.0"}), timeout=10) as resp:
+                data = json.loads(resp.read(200_000).decode("utf-8", errors="replace"))
+            if data.get("AbstractText"):
+                results.append({
+                    "title": data.get("Heading") or q,
+                    "url": data.get("AbstractURL") or "",
+                    "snippet": data.get("AbstractText")[:500],
+                })
+            for t in (data.get("RelatedTopics") or [])[:3]:
+                if isinstance(t, dict) and t.get("Text"):
+                    results.append({"title": t.get("Text", "")[:160], "url": t.get("FirstURL") or ""})
+        except Exception:
+            pass
+    return results
+
+
 def configured_deputies():
     return sum(bool(os.getenv(f"DEPUTY_{i}_PASSWORD") or (i == 1 and os.getenv("DEPUTY_PASSWORD"))) for i in range(1, 9))
 def configured_teachers():
     return sum(bool(os.getenv(f"TEACHER_{i}_PASSWORD")) for i in range(1, 11))
+
+def configured_students() -> int:
+    """Count only STUDENT_n_PASSWORD set in environment / .env — nowhere else."""
+    n = 0
+    for i in range(1, STUDENT_MAX + 1):
+        if os.getenv(f"STUDENT_{i}_PASSWORD", "").strip():
+            n += 1
+    return n
+
+def student_password(index: int) -> str:
+    if index < 1 or index > STUDENT_MAX:
+        return ""
+    return os.getenv(f"STUDENT_{index}_PASSWORD", "").strip()
 
 
 def db():
@@ -217,6 +301,35 @@ def init_db():
                 detail TEXT,
                 created_at INTEGER NOT NULL
             );
+            
+            CREATE TABLE IF NOT EXISTS conversations (
+                id TEXT PRIMARY KEY,
+                user_key TEXT NOT NULL,
+                title TEXT,
+                created_at INTEGER,
+                updated_at INTEGER
+            );
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                conversation_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS memory_notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_key TEXT NOT NULL,
+                note TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS user_files (
+                id TEXT PRIMARY KEY,
+                user_key TEXT NOT NULL,
+                filename TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS media_jobs (
                 id TEXT PRIMARY KEY,
                 kind TEXT NOT NULL,
@@ -229,15 +342,32 @@ def init_db():
                 created_at INTEGER NOT NULL
             );
             """)
-            if conn.execute("SELECT COUNT(*) AS c FROM plans").fetchone()["c"] == 0:
-                conn.executemany(
-                    "INSERT INTO plans (id, name, price_label, duration_days, features, active) VALUES (?,?,?,?,?,1)",
-                    [
-                        ("free", "رایگان", "۰ تومان", 0, json.dumps(["چت محدود", "دسترسی پایه"], ensure_ascii=False)),
-                        ("plus", "پلاس", "قابل تنظیم", 30, json.dumps(["چت بیشتر", "استودیو تصویر"], ensure_ascii=False)),
-                        ("pro", "حرفه‌ای", "قابل تنظیم", 30, json.dumps(["دسترسی کامل", "اولویت پشتیبانی"], ensure_ascii=False)),
-                    ],
+            # Always sync canonical plan catalog (idempotent upsert)
+            plan_rows = [
+                ("plus_1m", "پلاس — ۱ ماه", "۵۰٬۰۰۰ کاوش", 30,
+                 json.dumps(["چت بیشتر", "حافظه گفتگو", "جست‌وجوی وب محدود"], ensure_ascii=False)),
+                ("plus_3m", "پلاس — ۳ ماه", "۱۵۰٬۰۰۰ کاوش", 90,
+                 json.dumps(["چت بیشتر", "حافظه گفتگو", "جست‌وجوی وب"], ensure_ascii=False)),
+                ("diamond_1m", "الماس — ۱ ماه", "۱۲۰٬۰۰۰ کاوش", 30,
+                 json.dumps(["همه امکانات پلاس", "ساخت فایل", "اولویت پاسخ"], ensure_ascii=False)),
+                ("diamond_3m", "الماس — ۳ ماه", "۳۶۰٬۰۰۰ کاوش", 90,
+                 json.dumps(["همه امکانات پلاس", "ساخت فایل", "اولویت پاسخ"], ensure_ascii=False)),
+                ("diamond_6m", "الماس — ۶ ماه", "۱٬۰۰۰٬۰۰۰ کاوش", 180,
+                 json.dumps(["همه امکانات الماس", "پشتیبانی بهتر"], ensure_ascii=False)),
+                ("diamond_1y", "الماس — ۱ سال", "۲٬۰۰۰٬۰۰۰ کاوش", 365,
+                 json.dumps(["همه امکانات الماس", "صرفه‌جویی سالانه"], ensure_ascii=False)),
+                ("diamond_5y", "الماس — ۵ سال", "۱۰٬۰۰۰٬۰۰۰ کاوش", 1825,
+                 json.dumps(["همه امکانات الماس", "بلندمدت"], ensure_ascii=False)),
+            ]
+            for row in plan_rows:
+                conn.execute(
+                    "INSERT INTO plans (id, name, price_label, duration_days, features, active) VALUES (?,?,?,?,?,1) "
+                    "ON CONFLICT(id) DO UPDATE SET name=excluded.name, price_label=excluded.price_label, "
+                    "duration_days=excluded.duration_days, features=excluded.features, active=1",
+                    row,
                 )
+            # deactivate old generic plans if present
+            conn.execute("UPDATE plans SET active=0 WHERE id IN ('free','plus','pro')")
             conn.commit()
             # hydrate in-memory sessions from DB
             now = time.time()
@@ -312,6 +442,11 @@ def role_label(role: str) -> str:
     m = re.fullmatch(r"teacher([1-9]|10)", role or "")
     if m:
         return f"معلم {m.group(1)}"
+    m = re.fullmatch(r"student([1-9]\d{0,3})", role or "")
+    if m:
+        idx = int(m.group(1))
+        if 1 <= idx <= STUDENT_MAX:
+            return f"دانش‌آموز {idx}"
     return role or "کاربر"
 
 def is_staff(role: str) -> bool:
@@ -404,6 +539,10 @@ def public_provider_status() -> dict:
             "deputyCount": 8,
             "teachersConfigured": configured_teachers(),
             "teacherCount": 10,
+            "studentsConfigured": configured_students(),
+            "studentCount": STUDENT_MAX,
+            "studentPasswordSource": "env-only",
+            "studentPasswordNote": "رمز دانش‌آموز فقط از STUDENT_n_PASSWORD در Environment/.env خوانده می‌شود.",
             "googleOAuth": False,
             "googleOAuthNote": "OAuth گوگل در این نسخه پیاده‌سازی نشده است.",
             "xaiGrokDirect": False,
@@ -504,8 +643,25 @@ class Handler(BaseHTTPRequestHandler):
                 "keyConfigured": bool(API_KEY), "imageConfigured": all(media_config("تصویر")),
                 "videoConfigured": all(media_config("ویدئو")), "managerConfigured": bool(os.getenv("MANAGER_PASSWORD")),
                 "deputiesConfigured": configured_deputies(), "deputyCount": 8,
-                "teachersConfigured": configured_teachers(), "teacherCount": 10
+                "teachersConfigured": configured_teachers(), "teacherCount": 10,
+                "studentsConfigured": configured_students(), "studentCount": STUDENT_MAX
             })
+
+        if path == "/api/memory":
+            s = self.session()
+            user_key = str(s["role"]) if s else "guest"
+            with lock:
+                conn = db()
+                try:
+                    rows = conn.execute(
+                        "SELECT id, note, created_at FROM memory_notes WHERE user_key=? ORDER BY id DESC LIMIT 30",
+                        (user_key,),
+                    ).fetchall()
+                    notes = [dict(r) for r in rows]
+                finally:
+                    conn.close()
+            return self.send_json(200, {"ok": True, "notes": notes})
+
         if path == "/api/me":
             s = self.session()
             if not s:
@@ -609,6 +765,29 @@ class Handler(BaseHTTPRequestHandler):
                 "videoConfigured": all(media_config("ویدئو")),
                 "note": "این داشبورد وضعیت سرویس و تنظیمات را نشان می‌دهد. مدیریت واقعی دانش‌آموزان، نمره‌ها و حضورغیاب هنوز پیاده‌سازی نشده است."
             })
+
+        if path.startswith("/api/files/"):
+            fid = path.split("/")[-1].strip()
+            if not re.fullmatch(r"[a-f0-9]{16}", fid or ""):
+                return self.send_json(400, {"ok": False, "error": "شناسه نامعتبر"})
+            with lock:
+                conn = db()
+                try:
+                    row = conn.execute("SELECT filename, content FROM user_files WHERE id=?", (fid,)).fetchone()
+                finally:
+                    conn.close()
+            if not row:
+                return self.send_json(404, {"ok": False, "error": "فایل پیدا نشد"})
+            data = (row["content"] or "").encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Disposition", f'attachment; filename="{row["filename"]}"')
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(data)
+            return
+
         if path == "/": path = "/index.html"
         if path == "/index.html":
             try: body = (PUBLIC / "index.html").read_bytes()
@@ -646,10 +825,34 @@ class Handler(BaseHTTPRequestHandler):
                     expected = os.getenv("DEPUTY_1_PASSWORD", "") or os.getenv("DEPUTY_PASSWORD", "")
                 elif re.fullmatch(r"teacher(?:[1-9]|10)", role):
                     expected = os.getenv(f"TEACHER_{role[7:]}_PASSWORD", "")
+                elif re.fullmatch(r"student([1-9]\d{0,3})", role):
+                    idx = int(re.fullmatch(r"student([1-9]\d{0,3})", role).group(1))
+                    if idx > STUDENT_MAX:
+                        expected = ""
+                    else:
+                        # ONLY from environment — never from DB, file upload, or client
+                        expected = student_password(idx)
                 else:
                     expected = ""
                 if not expected:
-                    return self.send_json(400, {"ok": False, "error": "این نقش در سرور پیکربندی نشده یا رمز برای آن تنظیم نشده است."})
+                    hint = {
+                        "manager": "متغیر MANAGER_PASSWORD را در Environment سرور (یا فایل .env محلی) تنظیم کن.",
+                        "deputy1": "متغیر DEPUTY_1_PASSWORD یا DEPUTY_PASSWORD را تنظیم کن.",
+                    }.get(role, f"متغیر رمز مربوط به نقش «{role}» را در Environment تنظیم کن.")
+                    if role.startswith("deputy") and role != "deputy1":
+                        hint = f"متغیر DEPUTY_{role[6:]}_PASSWORD را تنظیم کن."
+                    if role.startswith("teacher"):
+                        hint = f"متغیر TEACHER_{role[7:]}_PASSWORD را تنظیم کن."
+                    if role.startswith("student"):
+                        m = re.fullmatch(r"student([1-9]\d{0,3})", role)
+                        idx = m.group(1) if m else "?"
+                        hint = f"متغیر STUDENT_{idx}_PASSWORD را فقط در Environment یا .env تنظیم کن (جای دیگری خوانده نمی‌شود)."
+                    return self.send_json(400, {
+                        "ok": False,
+                        "error": "این نقش در سرور پیکربندی نشده است. " + hint,
+                        "role": role,
+                        "envHint": hint,
+                    })
                 if not password or not hmac.compare_digest(password, expected):
                     log_activity(role or "unknown", "login_fail", ip)
                     return self.send_json(401, {"ok": False, "error": "رمز عبور درست نیست."})
@@ -835,6 +1038,95 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, {"ok": True, "message": "متغیرهای ویدئو روی سرور تنظیم شده‌اند (بدون ارسال درخواست واقعی به ارائه‌دهنده در این تست سبک)."})
             return self.send_json(400, {"ok": False, "error": "kind نامعتبر است."})
 
+        
+        if path == "/api/web-search":
+            if not self.rate_allowed():
+                return self.send_json(429, {"ok": False, "error": "تعداد درخواست‌ها زیاد است."})
+            try:
+                body = self.read_json(10_000)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+            q = str(body.get("query") or body.get("q") or "").strip()
+            if not q:
+                return self.send_json(400, {"ok": False, "error": "عبارت جست‌وجو لازم است."})
+            try:
+                results = web_search(q, limit=int(body.get("limit") or 5))
+            except RuntimeError as exc:
+                return self.send_json(502, {"ok": False, "error": str(exc)[:300]})
+            return self.send_json(200, {"ok": True, "query": q, "results": results})
+
+        if path == "/api/memory":
+            s = self.session()
+            user_key = str(s["role"]) if s else "guest"
+            try:
+                body = self.read_json(20_000)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+            action = str(body.get("action") or "list").strip()
+            if action == "add":
+                note = str(body.get("note") or "").strip()[:2000]
+                if not note:
+                    return self.send_json(400, {"ok": False, "error": "متن حافظه لازم است."})
+                with lock:
+                    conn = db()
+                    try:
+                        conn.execute(
+                            "INSERT INTO memory_notes (user_key, note, created_at) VALUES (?,?,?)",
+                            (user_key, note, int(time.time())),
+                        )
+                        conn.commit()
+                    finally:
+                        conn.close()
+                return self.send_json(200, {"ok": True})
+            if action == "clear":
+                with lock:
+                    conn = db()
+                    try:
+                        conn.execute("DELETE FROM memory_notes WHERE user_key=?", (user_key,))
+                        conn.commit()
+                    finally:
+                        conn.close()
+                return self.send_json(200, {"ok": True})
+            with lock:
+                conn = db()
+                try:
+                    rows = conn.execute(
+                        "SELECT id, note, created_at FROM memory_notes WHERE user_key=? ORDER BY id DESC LIMIT 30",
+                        (user_key,),
+                    ).fetchall()
+                    notes = [dict(r) for r in rows]
+                finally:
+                    conn.close()
+            return self.send_json(200, {"ok": True, "notes": notes})
+
+        if path == "/api/files/create":
+            s = self.session()
+            user_key = str(s["role"]) if s else "guest"
+            if not self.rate_allowed():
+                return self.send_json(429, {"ok": False, "error": "تعداد درخواست‌ها زیاد است."})
+            try:
+                body = self.read_json(500_000)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+            filename = str(body.get("filename") or "file.txt").strip()
+            filename = re.sub(r"[^\w.\u0600-\u06FF\-]+", "_", filename)[:80] or "file.txt"
+            content = str(body.get("content") or "")
+            if len(content) > 400_000:
+                return self.send_json(400, {"ok": False, "error": "حجم فایل بیش از حد است."})
+            fid = secrets.token_hex(8)
+            with lock:
+                conn = db()
+                try:
+                    conn.execute(
+                        "INSERT INTO user_files (id, user_key, filename, content, created_at) VALUES (?,?,?,?,?)",
+                        (fid, user_key, filename, content, int(time.time())),
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
+            return self.send_json(200, {"ok": True, "id": fid, "filename": filename, "downloadPath": f"/api/files/{fid}"})
+
+
         if path == "/api/chat":
             if not self.rate_allowed(): return self.send_json(429, {"ok": False, "error": "درخواست‌ها خیلی زیاد شده‌اند؛ یک دقیقه بعد دوباره تلاش کن."})
             try:
@@ -846,6 +1138,40 @@ class Handler(BaseHTTPRequestHandler):
                 hist = body.get("history", [])
                 if not isinstance(hist, list): hist = []
                 messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+                # server-side memory notes
+                s_mem = self.session()
+                user_key = str(s_mem["role"]) if s_mem else "guest"
+                try:
+                    with lock:
+                        conn = db()
+                        try:
+                            mem_rows = conn.execute(
+                                "SELECT note FROM memory_notes WHERE user_key=? ORDER BY id DESC LIMIT 12",
+                                (user_key,),
+                            ).fetchall()
+                        finally:
+                            conn.close()
+                    if mem_rows:
+                        mem_text = "\n".join(f"- {r['note']}" for r in reversed(list(mem_rows)))
+                        messages.append({
+                            "role": "system",
+                            "content": "حافظهٔ ذخیره‌شده دربارهٔ این کاربر (از آن برای شخصی‌سازی پاسخ استفاده کن):\n" + mem_text,
+                        })
+                except Exception:
+                    pass
+                use_web = bool(body.get("webSearch"))
+                web_block = ""
+                if use_web:
+                    try:
+                        results = web_search(message, limit=5)
+                        if results:
+                            lines = []
+                            for i, r in enumerate(results, 1):
+                                lines.append(f"{i}. {r.get('title','')} — {r.get('url','')} {r.get('snippet','')}")
+                            web_block = "نتایج جست‌وجوی وب مرتبط:\n" + "\n".join(lines)
+                            messages.append({"role": "system", "content": web_block + "\nاین منابع را در پاسخ ذکر کن و اگر مطمئن نیستی بگو."})
+                    except RuntimeError as exc:
+                        messages.append({"role": "system", "content": f"(جست‌وجوی وب در دسترس نبود: {exc})"})
                 for item in hist[-24:]:
                     if isinstance(item, dict) and item.get("role") in ("user", "assistant") and isinstance(item.get("content"), str):
                         messages.append({"role": item["role"], "content": item["content"][:8000]})
