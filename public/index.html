@@ -516,7 +516,7 @@ async function refreshHealth(){
     if (data.imageProvider === 'local-svg' || !data.imageConfigured) {
       $('imgSetup').style.display = 'block';
       $('imgSetup').className = 'alert ok';
-      $('imgSetup').textContent = 'موتور محلی تصویر فعال است (بدون نیاز به API). با تنظیم IMAGE_API_* از سرویس ابری استفاده می‌شود.';
+      $('imgSetup').textContent = 'تصویر با موتور AI عمومی ساخته می‌شود (بدون کلید شما). با IMAGE_API_* می‌توانید ارائه‌دهندهٔ خودتان را بگذارید.';
     } else {
       $('imgSetup').style.display = 'block';
       $('imgSetup').className = 'alert ok';
