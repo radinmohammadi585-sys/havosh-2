@@ -145,6 +145,86 @@ def media_config(kind):
     model = (os.environ.get(f"{prefix}_MODEL") or "").strip()
     return url, key, model
 
+
+def local_image_svg(prompt: str, size: int = 768) -> str:
+    """Procedural SVG art from prompt — no external image API required."""
+    import hashlib
+    text = (prompt or "Kavosh").strip()[:400] or "Kavosh"
+    h = hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+    def byte(i: int) -> int:
+        i = i % 32
+        return int(h[i * 2 : i * 2 + 2], 16)
+
+    colors = []
+    for i in range(5):
+        r = byte(i * 3) % 180 + 40
+        g = byte(i * 3 + 1) % 160 + 50
+        b = byte(i * 3 + 2) % 200 + 40
+        colors.append("#%02x%02x%02x" % (r, g, b))
+    shapes = []
+    for i in range(28):
+        cx = (byte(i) * 13 + i * 37) % size
+        cy = (byte(i + 5) * 17 + i * 29) % size
+        rad = 2 + (byte(i + 8) % 10)
+        op = 0.25 + (byte(i + 11) % 60) / 100.0
+        shapes.append(
+            '<circle cx="%d" cy="%d" r="%d" fill="#e8eeff" opacity="%.2f"/>' % (cx, cy, rad, op)
+        )
+    for i in range(6):
+        cx = byte(20 + i) % size
+        cy = byte(30 + i) % size
+        rx = 40 + byte(40 + i) % 120
+        ry = 30 + byte(50 + i) % 100
+        shapes.append(
+            '<ellipse cx="%d" cy="%d" rx="%d" ry="%d" fill="%s" opacity="0.35"/>'
+            % (cx, cy, rx, ry, colors[2 + i % 3])
+        )
+    for i in range(3):
+        cx = size // 2 + (i - 1) * 40
+        cy = size // 2 + (byte(60 + i) % 40) - 20
+        rad = 80 + i * 55
+        shapes.append(
+            '<circle cx="%d" cy="%d" r="%d" fill="none" stroke="%s" stroke-width="2" opacity="0.45"/>'
+            % (cx, cy, rad, colors[i % 5])
+        )
+    safe = (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+    if len(safe) > 80:
+        safe = safe[:77] + "..."
+    parts = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">' % (size, size, size, size),
+        "<defs>",
+        '<linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">',
+        '<stop offset="0%%" style="stop-color:%s"/>' % colors[0],
+        '<stop offset="100%%" style="stop-color:%s"/>' % colors[1],
+        "</linearGradient>",
+        '<radialGradient id="glow" cx="50%" cy="40%" r="50%">',
+        '<stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.35"/>',
+        '<stop offset="100%" style="stop-color:#000000;stop-opacity:0"/>',
+        "</radialGradient>",
+        "</defs>",
+        '<rect width="100%" height="100%" fill="url(#bg)"/>',
+        '<rect width="100%" height="100%" fill="url(#glow)"/>',
+        "".join(shapes),
+        '<rect x="24" y="%d" width="%d" height="64" rx="12" fill="#00000066"/>' % (size - 88, size - 48),
+        '<text x="40" y="%d" fill="#f2f5ff" font-family="Tahoma,sans-serif" font-size="18">%s</text>' % (size - 48, safe),
+        '<text x="40" y="%d" fill="#aab5d6" font-family="Tahoma,sans-serif" font-size="12">Kavosh AI 2 - local (no API)</text>' % (size - 28),
+        "</svg>",
+    ]
+    return "\n".join(parts)
+
+
+def svg_to_data_url(svg: str) -> str:
+    import base64
+    return "data:image/svg+xml;base64," + base64.b64encode(svg.encode("utf-8")).decode("ascii")
+
+
 def call_media(kind, prompt, client_overrides=None):
     # Explicitly ignore any client-supplied url/key/model
     if client_overrides:
@@ -152,6 +232,16 @@ def call_media(kind, prompt, client_overrides=None):
             if bad in client_overrides:
                 pass  # discarded
     endpoint, key, model = media_config(kind)
+    # No IMAGE_* env => local procedural image (no external API)
+    if kind == "تصویر" and (not endpoint or not key or not model):
+        data_url = svg_to_data_url(local_image_svg(prompt))
+        return {
+            "ok": True,
+            "dataUrl": data_url,
+            "url": data_url,
+            "provider": "local-svg",
+            "message": "تصویر با موتور محلی ساخته شد (بدون API). برای مدل ابری IMAGE_API_* را در .env بگذارید.",
+        }
     if not endpoint or not key or not model:
         names = "IMAGE_API_URL، IMAGE_API_KEY و IMAGE_MODEL" if kind == "تصویر" else "VIDEO_API_URL، VIDEO_API_KEY و VIDEO_MODEL"
         raise ValueError(
@@ -586,11 +676,13 @@ def public_provider_status() -> dict:
             "note": "کلید فقط روی سرور است و به مرورگر فرستاده نمی‌شود.",
         },
         "image": {
-            "provider": "configured-media-api" if img_url else "none",
-            "endpointConfigured": bool(img_url),
+            "provider": "configured-media-api" if (img_url and img_key and img_model) else "local-svg",
+            "endpointConfigured": bool(img_url and img_key and img_model),
             "endpointHost": (urlparse(img_url).netloc if img_url else ""),
-            "model": img_model or "(empty)",
+            "model": img_model or "(local procedural)",
             "keyConfigured": bool(img_key),
+            "localFallback": True,
+            "note": "بدون IMAGE_API_* تصویر محلی ساخته می‌شود.",
         },
         "video": {
             "provider": "configured-media-api" if vid_url else "none",
@@ -706,7 +798,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/health":
             return self.send_json(200, {
                 "ok": True, "name": SITE_NAME, "version": "2.1.0", "provider": "openrouter", "runtime": "python",
-                "keyConfigured": bool(API_KEY), "imageConfigured": all(media_config("تصویر")),
+                "keyConfigured": bool(API_KEY), "imageConfigured": True, "imageProvider": ("api" if all(media_config("تصویر")) else "local-svg"),
                 "videoConfigured": all(media_config("ویدئو")), "managerConfigured": bool(os.getenv("MANAGER_PASSWORD")),
                 "deputiesConfigured": configured_deputies(), "deputyCount": 8,
                 "teachersConfigured": configured_teachers(), "teacherCount": 10,
@@ -804,7 +896,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, {
                 "ok": True, "role": role, "name": role_label(role), "label": role_label(role),
                 "keyConfigured": bool(API_KEY),
-                "imageConfigured": all(media_config("تصویر")),
+                "imageConfigured": True, "imageProvider": ("api" if all(media_config("تصویر")) else "local-svg"),
                 "videoConfigured": all(media_config("ویدئو")),
                 "openTickets": open_tickets, "contests": contests,
                 "activity": [dict(x) for x in logs],
@@ -827,7 +919,7 @@ class Handler(BaseHTTPRequestHandler):
             if not s: return self.send_json(401, {"ok": False, "error": "ابتدا وارد پنل شو."})
             return self.send_json(200, {
                 "ok": True, "role": s["role"], "site": SITE_NAME, "version": "2.1.0",
-                "aiConfigured": bool(API_KEY), "imageConfigured": all(media_config("تصویر")),
+                "aiConfigured": bool(API_KEY), "imageConfigured": True, "imageProvider": ("api" if all(media_config("تصویر")) else "local-svg"),
                 "videoConfigured": all(media_config("ویدئو")),
                 "note": "این داشبورد وضعیت سرویس و تنظیمات را نشان می‌دهد. مدیریت واقعی دانش‌آموزان، نمره‌ها و حضورغیاب هنوز پیاده‌سازی نشده است."
             })
@@ -868,7 +960,7 @@ class Handler(BaseHTTPRequestHandler):
             s = self.session()
             if not s: return self.send_json(401, {"ok": False, "error": "ابتدا وارد پنل شو."})
             return self.send_json(200, {"ok": True, "role": s["role"], "site": SITE_NAME, "version": "2.1.0",
-                "aiConfigured": bool(API_KEY), "imageConfigured": all(media_config("تصویر")), "videoConfigured": all(media_config("ویدئو")),
+                "aiConfigured": bool(API_KEY), "imageConfigured": True, "imageProvider": ("api" if all(media_config("تصویر")) else "local-svg"), "videoConfigured": all(media_config("ویدئو")),
                 "note": "این داشبورد وضعیت سرویس و تنظیمات را نشان می‌دهد. مدیریت واقعی دانش‌آموزان، نمره‌ها و حضورغیاب هنوز پیاده‌سازی نشده است."})
         if path == "/api/auth/login":
             try:
