@@ -225,6 +225,59 @@ def svg_to_data_url(svg: str) -> str:
     return "data:image/svg+xml;base64," + base64.b64encode(svg.encode("utf-8")).decode("ascii")
 
 
+
+def generate_image_without_user_key(prompt: str) -> dict:
+    """Real AI image via public Pollinations endpoint (no API key required).
+    Falls back to local SVG if the network call fails.
+    """
+    from urllib.parse import quote
+    text = (prompt or "cosmic art").strip()[:500] or "cosmic art"
+    # Pollinations public image API — no key; returns image bytes
+    # seed from prompt for some stability
+    import hashlib
+    seed = int(hashlib.md5(text.encode("utf-8")).hexdigest()[:8], 16) % 999999
+    path = quote(text, safe="")
+    url = (
+        "https://image.pollinations.ai/prompt/"
+        + path
+        + f"?width=768&height=768&seed={seed}&nologo=true&enhance=true"
+    )
+    try:
+        req = Request(
+            url,
+            headers={
+                "User-Agent": "KavoshAI2/2.1",
+                "Accept": "image/*,*/*",
+            },
+            method="GET",
+        )
+        with urlopen(req, timeout=90) as resp:
+            data = resp.read(6_000_000)
+            ctype = (resp.headers.get("Content-Type") or "image/jpeg").split(";")[0].strip()
+        if len(data) < 500 or not ctype.startswith("image/"):
+            raise RuntimeError("پاسخ تصویر معتبر نبود")
+        import base64
+        b64 = base64.b64encode(data).decode("ascii")
+        data_url = f"data:{ctype};base64,{b64}"
+        return {
+            "ok": True,
+            "url": data_url,
+            "dataUrl": data_url,
+            "provider": "pollinations",
+            "message": "تصویر با موتور AI عمومی ساخته شد (بدون نیاز به کلید شما).",
+        }
+    except Exception as exc:
+        # offline fallback
+        data_url = svg_to_data_url(local_image_svg(text))
+        return {
+            "ok": True,
+            "url": data_url,
+            "dataUrl": data_url,
+            "provider": "local-svg-fallback",
+            "message": f"سرویس AI تصویر در دسترس نبود ({exc}). تصویر گرافیکی محلی جایگزین شد.",
+        }
+
+
 def call_media(kind, prompt, client_overrides=None):
     # Explicitly ignore any client-supplied url/key/model
     if client_overrides:
@@ -232,16 +285,9 @@ def call_media(kind, prompt, client_overrides=None):
             if bad in client_overrides:
                 pass  # discarded
     endpoint, key, model = media_config(kind)
-    # No IMAGE_* env => local procedural image (no external API)
+    # No IMAGE_* env => use public AI image endpoint (no user key), else offline SVG
     if kind == "تصویر" and (not endpoint or not key or not model):
-        data_url = svg_to_data_url(local_image_svg(prompt))
-        return {
-            "ok": True,
-            "dataUrl": data_url,
-            "url": data_url,
-            "provider": "local-svg",
-            "message": "تصویر با موتور محلی ساخته شد (بدون API). برای مدل ابری IMAGE_API_* را در .env بگذارید.",
-        }
+        return generate_image_without_user_key(prompt)
     if not endpoint or not key or not model:
         names = "IMAGE_API_URL، IMAGE_API_KEY و IMAGE_MODEL" if kind == "تصویر" else "VIDEO_API_URL، VIDEO_API_KEY و VIDEO_MODEL"
         raise ValueError(
@@ -676,13 +722,13 @@ def public_provider_status() -> dict:
             "note": "کلید فقط روی سرور است و به مرورگر فرستاده نمی‌شود.",
         },
         "image": {
-            "provider": "configured-media-api" if (img_url and img_key and img_model) else "local-svg",
+            "provider": "configured-media-api" if (img_url and img_key and img_model) else "pollinations (no key) / local fallback",
             "endpointConfigured": bool(img_url and img_key and img_model),
             "endpointHost": (urlparse(img_url).netloc if img_url else ""),
             "model": img_model or "(local procedural)",
             "keyConfigured": bool(img_key),
             "localFallback": True,
-            "note": "بدون IMAGE_API_* تصویر محلی ساخته می‌شود.",
+            "note": "بدون IMAGE_API_* از موتور AI عمومی (Pollinations) استفاده می‌شود؛ اگر قطع باشد SVG محلی.",
         },
         "video": {
             "provider": "configured-media-api" if vid_url else "none",
@@ -798,7 +844,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/health":
             return self.send_json(200, {
                 "ok": True, "name": SITE_NAME, "version": "2.1.0", "provider": "openrouter", "runtime": "python",
-                "keyConfigured": bool(API_KEY), "imageConfigured": True, "imageProvider": ("api" if all(media_config("تصویر")) else "local-svg"),
+                "keyConfigured": bool(API_KEY), "imageConfigured": True, "imageProvider": ("api" if all(media_config("تصویر")) else "pollinations-or-local"),
                 "videoConfigured": all(media_config("ویدئو")), "managerConfigured": bool(os.getenv("MANAGER_PASSWORD")),
                 "deputiesConfigured": configured_deputies(), "deputyCount": 8,
                 "teachersConfigured": configured_teachers(), "teacherCount": 10,
@@ -896,7 +942,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, {
                 "ok": True, "role": role, "name": role_label(role), "label": role_label(role),
                 "keyConfigured": bool(API_KEY),
-                "imageConfigured": True, "imageProvider": ("api" if all(media_config("تصویر")) else "local-svg"),
+                "imageConfigured": True, "imageProvider": ("api" if all(media_config("تصویر")) else "pollinations-or-local"),
                 "videoConfigured": all(media_config("ویدئو")),
                 "openTickets": open_tickets, "contests": contests,
                 "activity": [dict(x) for x in logs],
@@ -919,7 +965,7 @@ class Handler(BaseHTTPRequestHandler):
             if not s: return self.send_json(401, {"ok": False, "error": "ابتدا وارد پنل شو."})
             return self.send_json(200, {
                 "ok": True, "role": s["role"], "site": SITE_NAME, "version": "2.1.0",
-                "aiConfigured": bool(API_KEY), "imageConfigured": True, "imageProvider": ("api" if all(media_config("تصویر")) else "local-svg"),
+                "aiConfigured": bool(API_KEY), "imageConfigured": True, "imageProvider": ("api" if all(media_config("تصویر")) else "pollinations-or-local"),
                 "videoConfigured": all(media_config("ویدئو")),
                 "note": "این داشبورد وضعیت سرویس و تنظیمات را نشان می‌دهد. مدیریت واقعی دانش‌آموزان، نمره‌ها و حضورغیاب هنوز پیاده‌سازی نشده است."
             })
@@ -960,7 +1006,7 @@ class Handler(BaseHTTPRequestHandler):
             s = self.session()
             if not s: return self.send_json(401, {"ok": False, "error": "ابتدا وارد پنل شو."})
             return self.send_json(200, {"ok": True, "role": s["role"], "site": SITE_NAME, "version": "2.1.0",
-                "aiConfigured": bool(API_KEY), "imageConfigured": True, "imageProvider": ("api" if all(media_config("تصویر")) else "local-svg"), "videoConfigured": all(media_config("ویدئو")),
+                "aiConfigured": bool(API_KEY), "imageConfigured": True, "imageProvider": ("api" if all(media_config("تصویر")) else "pollinations-or-local"), "videoConfigured": all(media_config("ویدئو")),
                 "note": "این داشبورد وضعیت سرویس و تنظیمات را نشان می‌دهد. مدیریت واقعی دانش‌آموزان، نمره‌ها و حضورغیاب هنوز پیاده‌سازی نشده است."})
         if path == "/api/auth/login":
             try:
