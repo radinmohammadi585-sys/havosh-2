@@ -164,52 +164,105 @@ def call_media(kind, prompt):
     raise RuntimeError("قالب پاسخ این ارائه‌دهنده با نسخهٔ فعلی سازگار نیست.")
 
 
+
 def web_search(query: str, limit: int = 5) -> list[dict]:
-    """Lightweight web search via DuckDuckGo HTML (no API key). Best-effort."""
+    """Best-effort web search without API keys. Multiple fallbacks."""
+    from urllib.parse import quote_plus, parse_qs, unquote, urlparse as up
     q = (query or "").strip()[:200]
     if not q:
         return []
-    from urllib.parse import quote_plus
-    url = "https://html.duckduckgo.com/html/?q=" + quote_plus(q)
-    req = Request(url, headers={"User-Agent": "KavoshAI2/2.0 (+https://example.local)"}, method="GET")
-    try:
-        with urlopen(req, timeout=12) as resp:
-            html = resp.read(400_000).decode("utf-8", errors="replace")
-    except Exception as exc:
-        raise RuntimeError(f"جست‌وجوی وب ناموفق: {exc}") from exc
-    results = []
-    # result links: class result__a
-    for m in re.finditer(r'class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', html, re.I | re.S):
-        href, title = m.group(1), re.sub(r"<[^>]+>", "", m.group(2))
-        title = re.sub(r"\s+", " ", title).strip()
-        # duckduckgo redirect links
-        if "uddg=" in href:
-            from urllib.parse import parse_qs, urlparse as up
-            qs = parse_qs(up(href).query)
-            href = (qs.get("uddg") or [href])[0]
-        if not title or not href.startswith("http"):
-            continue
-        results.append({"title": title[:200], "url": href[:500]})
+    results: list[dict] = []
+    ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    errors = []
+
+    def add(title, url="", snippet=""):
+        title = re.sub(r"\s+", " ", str(title or "")).strip()
+        if not title:
+            return
+        results.append({"title": title[:200], "url": str(url or "")[:500], "snippet": str(snippet or "")[:300]})
+
+    # 1) Wikipedia OpenSearch (fa then en)
+    for lang in ("fa", "en"):
         if len(results) >= limit:
             break
-    if not results:
-        # fallback snippet from instant answer API
+        try:
+            api = (
+                f"https://{lang}.wikipedia.org/w/api.php?action=opensearch&search="
+                + quote_plus(q)
+                + f"&limit={limit}&namespace=0&format=json"
+            )
+            req = Request(api, headers={"User-Agent": ua, "Accept": "application/json"}, method="GET")
+            with urlopen(req, timeout=12) as resp:
+                raw = resp.read(300_000).decode("utf-8", errors="replace")
+                data = json.loads(raw)
+            # [query, [titles], [descs], [urls]]
+            if isinstance(data, list) and len(data) >= 4:
+                titles, descs, urls = data[1], data[2], data[3]
+                for i in range(min(len(titles), limit)):
+                    add(titles[i], urls[i] if i < len(urls) else "", descs[i] if i < len(descs) else "")
+                    if len(results) >= limit:
+                        break
+        except Exception as exc:
+            errors.append(f"wiki-{lang}:{exc}")
+
+    # 2) DuckDuckGo Instant Answer JSON
+    if len(results) < 2:
         try:
             ia = "https://api.duckduckgo.com/?q=" + quote_plus(q) + "&format=json&no_html=1&skip_disambig=1"
-            with urlopen(Request(ia, headers={"User-Agent": "KavoshAI2/2.0"}), timeout=10) as resp:
-                data = json.loads(resp.read(200_000).decode("utf-8", errors="replace"))
-            if data.get("AbstractText"):
-                results.append({
-                    "title": data.get("Heading") or q,
-                    "url": data.get("AbstractURL") or "",
-                    "snippet": data.get("AbstractText")[:500],
-                })
-            for t in (data.get("RelatedTopics") or [])[:3]:
-                if isinstance(t, dict) and t.get("Text"):
-                    results.append({"title": t.get("Text", "")[:160], "url": t.get("FirstURL") or ""})
-        except Exception:
-            pass
-    return results
+            req = Request(ia, headers={"User-Agent": ua, "Accept": "application/json"}, method="GET")
+            with urlopen(req, timeout=12) as resp:
+                raw = resp.read(300_000).decode("utf-8", errors="replace").strip()
+                if raw:
+                    data = json.loads(raw)
+                    if data.get("AbstractText"):
+                        add(data.get("Heading") or q, data.get("AbstractURL") or "", data.get("AbstractText"))
+                    for t in (data.get("RelatedTopics") or []):
+                        if isinstance(t, dict) and t.get("Text"):
+                            add(t.get("Text"), t.get("FirstURL") or "", t.get("Text"))
+                        elif isinstance(t, dict) and isinstance(t.get("Topics"), list):
+                            for tt in t["Topics"]:
+                                if isinstance(tt, dict) and tt.get("Text"):
+                                    add(tt.get("Text"), tt.get("FirstURL") or "", tt.get("Text"))
+                        if len(results) >= limit:
+                            break
+        except Exception as exc:
+            errors.append(f"ddg-ia:{exc}")
+
+    # 3) DuckDuckGo HTML (last resort)
+    if len(results) < 1:
+        try:
+            url = "https://html.duckduckgo.com/html/?q=" + quote_plus(q)
+            req = Request(url, headers={"User-Agent": ua, "Accept": "text/html"}, method="GET")
+            with urlopen(req, timeout=15) as resp:
+                html = resp.read(500_000).decode("utf-8", errors="replace")
+            for m in re.finditer(r'class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', html, re.I | re.S):
+                href, title = m.group(1), re.sub(r"<[^>]+>", "", m.group(2))
+                if "uddg=" in href:
+                    try:
+                        qs = parse_qs(up(href).query)
+                        href = unquote((qs.get("uddg") or [href])[0])
+                    except Exception:
+                        pass
+                if href.startswith("http"):
+                    add(title, href, "")
+                if len(results) >= limit:
+                    break
+        except Exception as exc:
+            errors.append(f"ddg-html:{exc}")
+
+    if not results:
+        raise RuntimeError("جست‌وجوی وب نتیجه‌ای نداد. " + ("; ".join(errors[:2]) if errors else "شبکه یا سرویس در دسترس نیست."))
+    # de-dupe by title
+    seen = set()
+    unique = []
+    for r in results:
+        key = r["title"].lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(r)
+    return unique[:limit]
+
 
 
 def configured_deputies():
@@ -1134,7 +1187,39 @@ class Handler(BaseHTTPRequestHandler):
                 if not message: return self.send_json(400, {"ok": False, "error": "اول پیامت را بنویس."})
                 math_answer = solve_math(message)
                 if math_answer: return self.send_json(200, {"ok": True, "answer": math_answer, "provider": "math"})
-                if not API_KEY: return self.send_json(500, {"ok": False, "error": "کلید API تنظیم نشده است. OPENROUTER_API_KEY را در تنظیمات خصوصی سرور وارد کن."})
+                want_search = bool(body.get("webSearch") or body.get("search"))
+                search_results = []
+                search_error = ""
+                if want_search:
+                    try:
+                        search_results = web_search(message, limit=5)
+                    except RuntimeError as exc:
+                        search_error = str(exc)[:300]
+                if not API_KEY:
+                    # Still useful: pure web search without LLM
+                    if want_search and search_results:
+                        lines = ["نتایج جست‌وجوی وب (بدون مدل AI — کلید OpenRouter تنظیم نشده):", ""]
+                        for i, r in enumerate(search_results, 1):
+                            lines.append(f"{i}. {r.get('title') or 'بدون عنوان'}")
+                            if r.get("snippet"):
+                                lines.append("   " + r["snippet"])
+                            if r.get("url"):
+                                lines.append("   " + r["url"])
+                            lines.append("")
+                        return self.send_json(200, {
+                            "ok": True,
+                            "answer": "\n".join(lines).strip(),
+                            "provider": "web-search",
+                            "searchResults": search_results,
+                            "note": "برای پاسخ هوشمند، OPENROUTER_API_KEY را تنظیم کنید.",
+                        })
+                    if want_search and search_error:
+                        return self.send_json(502, {"ok": False, "error": search_error, "setupRequired": False})
+                    return self.send_json(503, {
+                        "ok": False,
+                        "error": "کلید API تنظیم نشده است. OPENROUTER_API_KEY را در تنظیمات خصوصی سرور وارد کن. برای جست‌وجوی وب بدون AI، گزینه «جست‌وجوی وب» را فعال کنید.",
+                        "setupRequired": True,
+                    })
                 hist = body.get("history", [])
                 if not isinstance(hist, list): hist = []
                 messages = [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -1159,19 +1244,15 @@ class Handler(BaseHTTPRequestHandler):
                         })
                 except Exception:
                     pass
-                use_web = bool(body.get("webSearch"))
-                web_block = ""
-                if use_web:
-                    try:
-                        results = web_search(message, limit=5)
-                        if results:
-                            lines = []
-                            for i, r in enumerate(results, 1):
-                                lines.append(f"{i}. {r.get('title','')} — {r.get('url','')} {r.get('snippet','')}")
-                            web_block = "نتایج جست‌وجوی وب مرتبط:\n" + "\n".join(lines)
-                            messages.append({"role": "system", "content": web_block + "\nاین منابع را در پاسخ ذکر کن و اگر مطمئن نیستی بگو."})
-                    except RuntimeError as exc:
-                        messages.append({"role": "system", "content": f"(جست‌وجوی وب در دسترس نبود: {exc})"})
+                # reuse search_results fetched earlier when webSearch was requested
+                if want_search and search_results:
+                    lines = []
+                    for i, r in enumerate(search_results, 1):
+                        lines.append(f"{i}. {r.get('title','')} — {r.get('url','')} {r.get('snippet','')}")
+                    web_block = "نتایج جست‌وجوی وب مرتبط:\n" + "\n".join(lines)
+                    messages.append({"role": "system", "content": web_block + "\nاین منابع را در پاسخ ذکر کن و اگر مطمئن نیستی بگو."})
+                elif want_search and search_error:
+                    messages.append({"role": "system", "content": f"(جست‌وجوی وب در دسترس نبود: {search_error})"})
                 for item in hist[-24:]:
                     if isinstance(item, dict) and item.get("role") in ("user", "assistant") and isinstance(item.get("content"), str):
                         messages.append({"role": item["role"], "content": item["content"][:8000]})
@@ -1186,7 +1267,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json(500, {"ok": False, "error": str(err or f"خطای سرویس هوش مصنوعی ({status})")[:500]})
                 answer = ((data.get("choices") or [{}])[0].get("message") or {}).get("content")
                 if not isinstance(answer, str) or not answer.strip(): return self.send_json(500, {"ok": False, "error": "پاسخ خالی از سرویس دریافت شد."})
-                return self.send_json(200, {"ok": True, "answer": answer.strip(), "provider": "openrouter"})
+                out = {"ok": True, "answer": answer.strip(), "provider": "openrouter"}
+                if search_results:
+                    out["searchResults"] = search_results
+                return self.send_json(200, out)
             except ValueError as exc: return self.send_json(400, {"ok": False, "error": str(exc)[:500]})
             except (RuntimeError, TimeoutError, OSError) as exc: return self.send_json(500, {"ok": False, "error": str(exc)[:500]})
         return self.send_json(404, {"ok": False, "error": "مسیر پیدا نشد."})
