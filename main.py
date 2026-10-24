@@ -16,65 +16,20 @@ from knowledge.store import (
 def load_env_file(path: Path) -> None:
     """Optional local .env for development. Does not override existing env vars."""
     if not path.is_file():
-        def load_env_file(path: Path) -> dict:
-    """Load .env robustly. Returns diagnostics (key NAMES only, never values).
-
-    Handles: BOM, inline comments, quoted values, empty-vs-missing env vars.
-    Does NOT override a real non-empty process env var (e.g. Render dashboard).
-    """
-    diag = {
-        "path": str(path),
-        "exists": False,
-        "loaded": [],
-        "skipped_existing_nonempty": [],
-        "overrode_empty_env": [],
-        "errors": [],
-    }
-    if not path.is_file():
-        diag["errors"].append("file-not-found")
-        return diag
-    diag["exists"] = True
+        return
     try:
-        # utf-8-sig strips BOM (Notepad trap); plain utf-8 files also work
-        text = path.read_text(encoding="utf-8-sig")
-    except OSError as exc:
-        diag["errors"].append(f"read-error:{type(exc).__name__}")
-        return diag
-
-    for lineno, raw in enumerate(text.splitlines(), 1):
-        line = raw.strip()
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return
+    for line in text.splitlines():
+        line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, _, val = line.partition("=")
         key = key.strip()
-        val = val.strip()
-
-        # strip one matching pair of outer quotes if present
-        if len(val) >= 2 and val[0] == val[-1] and val[0] in ("'", '"'):
-            val = val[1:-1]
-        else:
-            # only strip " #..." inline comments when unquoted
-            cut = val.find(" #")
-            if cut != -1:
-                val = val[:cut].rstrip()
-
-        if not key:
-            diag["errors"].append(f"empty-key-line-{lineno}")
-            continue
-
-        existing = os.environ.get(key, "")
-        if existing.strip():
-            # already present AND non-empty in real env → keep it (e.g. Render)
-            diag["skipped_existing_nonempty"].append(key)
-            continue
-        if key in os.environ and existing == "":
-            # present but empty (e.g. exported as IMAGE_API_KEY=) → safe to fill
-            diag["overrode_empty_env"].append(key)
-
-        os.environ[key] = val
-        diag["loaded"].append(key)
-
-    return diag
+        val = val.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = val
 
 load_env_file(Path(__file__).resolve().parent / ".env")
 
