@@ -130,7 +130,7 @@ def call_json_api(url: str, key: str, payload: dict, timeout=60, extra_headers=N
     request = Request(url, data=json_bytes(payload), headers=headers, method="POST")
     try:
         with urlopen(request, timeout=timeout) as response:
-            raw = response.read(2_000_000)
+            raw = response.read(12_000_000)
             return response.status, json.loads(raw.decode("utf-8"))
     except HTTPError as exc:
         raw = exc.read(1_000_000)
@@ -1489,6 +1489,7 @@ class Handler(BaseHTTPRequestHandler):
             if not validate_csrf(csrf):
                 return self.send_json(403, {"ok": False, "error": "توکن CSRF نامعتبر است. صفحه را تازه کنید."})
             kind = str(body.get("kind") or "chat").strip()
+
             if kind == "chat":
                 if not API_KEY:
                     return self.send_json(200, {"ok": False, "error": "OPENROUTER_API_KEY تنظیم نشده است."})
@@ -1505,14 +1506,87 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json(200, {"ok": False, "error": str(err or f"HTTP {status}")[:300]})
                 except Exception as exc:
                     return self.send_json(200, {"ok": False, "error": str(exc)[:300]})
+
             if kind == "image":
-                if not all(media_config("تصویر")):
-                    return self.send_json(200, {"ok": False, "error": "IMAGE_API_URL / KEY / MODEL کامل نیست."})
-                return self.send_json(200, {"ok": True, "message": "متغیرهای تصویر روی سرور تنظیم شده‌اند (بدون ارسال درخواست واقعی به ارائه‌دهنده در این تست سبک)."})
+                ep, k, m = media_config("تصویر")
+                if not (ep and k and m):
+                    return self.send_json(200, {"ok": False, "error": "IMAGE_API_URL / IMAGE_API_KEY / IMAGE_MODEL کامل نیست."})
+                try:
+                    # Real API call with a tiny prompt (test costs almost nothing)
+                    status, data = call_json_api(
+                        ep, k,
+                        {"model": m, "prompt": "a small red dot on white"},
+                        timeout=60,
+                    )
+                    if 200 <= status < 300:
+                        has_output = bool(
+                            isinstance(data, dict) and (
+                                data.get("data") or data.get("url") or data.get("output")
+                                or data.get("b64_json") or data.get("id") or data.get("task_id")
+                            )
+                        )
+                        return self.send_json(200, {
+                            "ok": True,
+                            "message": "✅ ارتباط واقعی با سرویس تصویر برقرار شد (HTTP %d).%s" % (
+                                status,
+                                " خروجی تصویری دریافت شد." if has_output else " پاسخ معتبر بود اما فیلد تصویر پیدا نشد؛ قالب پاسخ ارائه‌دهنده را بررسی کن."
+                            ),
+                            "responseKeys": list(data.keys())[:12] if isinstance(data, dict) else [],
+                            "testedPrompt": "a small red dot on white",
+                        })
+                    err = None
+                    if isinstance(data, dict):
+                        e = data.get("error")
+                        if isinstance(e, dict):
+                            err = e.get("message")
+                        else:
+                            err = e or data.get("message")
+                    return self.send_json(200, {
+                        "ok": False,
+                        "error": "❌ HTTP %d: %s" % (status, str(err or data)[:300]),
+                    })
+                except Exception as exc:
+                    return self.send_json(200, {"ok": False, "error": "❌ اتصال واقعی برقرار نشد: " + str(exc)[:300]})
+
             if kind == "video":
-                if not all(media_config("ویدئو")):
-                    return self.send_json(200, {"ok": False, "error": "VIDEO_API_URL / KEY / MODEL کامل نیست."})
-                return self.send_json(200, {"ok": True, "message": "متغیرهای ویدئو روی سرور تنظیم شده‌اند (بدون ارسال درخواست واقعی به ارائه‌دهنده در این تست سبک)."})
+                ep, k, m = media_config("ویدئو")
+                if not (ep and k and m):
+                    return self.send_json(200, {"ok": False, "error": "VIDEO_API_URL / VIDEO_API_KEY / VIDEO_MODEL کامل نیست."})
+                try:
+                    status, data = call_json_api(
+                        ep, k,
+                        {"model": m, "prompt": "test"},
+                        timeout=90,
+                    )
+                    if 200 <= status < 300:
+                        has_task = bool(
+                            isinstance(data, dict) and (
+                                data.get("id") or data.get("task_id") or data.get("job_id")
+                                or data.get("data") or data.get("url") or data.get("output")
+                            )
+                        )
+                        return self.send_json(200, {
+                            "ok": True,
+                            "message": "✅ ارتباط واقعی با سرویس ویدئو برقرار شد (HTTP %d).%s" % (
+                                status,
+                                " درخواست پذیرفته شد." if has_task else " پاسخ معتبر بود."
+                            ),
+                            "responseKeys": list(data.keys())[:12] if isinstance(data, dict) else [],
+                        })
+                    err = None
+                    if isinstance(data, dict):
+                        e = data.get("error")
+                        if isinstance(e, dict):
+                            err = e.get("message")
+                        else:
+                            err = e or data.get("message")
+                    return self.send_json(200, {
+                        "ok": False,
+                        "error": "❌ HTTP %d: %s" % (status, str(err or data)[:300]),
+                    })
+                except Exception as exc:
+                    return self.send_json(200, {"ok": False, "error": "❌ اتصال واقعی برقرار نشد: " + str(exc)[:300]})
+
             return self.send_json(400, {"ok": False, "error": "kind نامعتبر است."})
 
         
