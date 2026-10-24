@@ -7,6 +7,10 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 from pathlib import Path
 import sqlite3
+from knowledge.store import (
+    ensure_knowledge_tables, ingest_document, search_chunks,
+    list_documents, create_purchase, list_purchases, update_purchase_status,
+)
 
 
 def load_env_file(path: Path) -> None:
@@ -226,107 +230,252 @@ def svg_to_data_url(svg: str) -> str:
 
 
 
+
+def has_persian(text: str) -> bool:
+    return any("\u0600" <= ch <= "\u06FF" for ch in (text or ""))
+
+
+def wants_person(prompt: str) -> bool:
+    p = (prompt or "").lower()
+    keys = [
+        "دختر", "پسر", "زن", "مرد", "آدم", "انسان", "شخص", "چهره", "پرتره", "صورت",
+        "کودک", "بچه", "خانم", "آقا", "نفر",
+        "girl", "boy", "woman", "man", "person", "people", "face", "portrait",
+        "human", "child", "lady", "gentleman", "selfie",
+    ]
+    return any(k in p for k in keys)
+
+
+# Expanded FA concept -> English visual (no random humans)
+FA_IMAGE_MAP = [
+    ("جهان", "the entire universe, vast cosmos, infinite space, galaxies scattered across the void"),
+    ("کیهان", "cosmos, cosmic web, deep space panorama"),
+    ("کهکشان", "spiral galaxy, luminous arms, interstellar dust, star clusters"),
+    ("فضا", "outer space, vacuum of space, distant stars, planetary vista"),
+    ("ستاره", "brilliant stars, starfield, astronomical photography"),
+    ("سیاره", "planet in space, atmospheric glow, orbital view"),
+    ("ماه", "the moon, detailed lunar surface, craters, night sky"),
+    ("خورشید", "the sun, solar surface, corona, intense light"),
+    ("سیاه‌چاله", "black hole, event horizon, accretion disk, gravitational lensing"),
+    ("سیاهچاله", "black hole, event horizon, accretion disk"),
+    ("ابرنواختر", "supernova explosion, cosmic blast, colorful nebula"),
+    ("سحابی", "colorful nebula, gas clouds, stellar nursery"),
+    ("زمین", "planet Earth from space, blue marble, atmosphere"),
+    ("آسمان", "dramatic sky, clouds, atmospheric perspective"),
+    ("شب", "night scene, moonlight, long exposure stars"),
+    ("روز", "daylight landscape, clear sky, natural light"),
+    ("دریا", "ocean seascape, waves, horizon, dramatic water"),
+    ("اقیانوس", "deep ocean, turquoise water, aerial seascape"),
+    ("کوه", "majestic mountains, snow peaks, epic landscape"),
+    ("جنگل", "lush forest, dense trees, god rays through canopy"),
+    ("بیابان", "desert dunes, golden sand, harsh sunlight"),
+    ("شهر", "futuristic city skyline, neon lights, cyberpunk architecture"),
+    ("تهران", "Tehran cityscape, mountains in background, urban panorama"),
+    ("ایران", "Iranian landscape, historic architecture, scenic vista"),
+    ("ربات", "advanced humanoid robot, sci-fi machine design, metallic details"),
+    ("ماشین", "sports car, sleek vehicle design, studio lighting"),
+    ("گل", "beautiful flowers, botanical detail, soft bokeh"),
+    ("درخت", "ancient tree, detailed bark, nature photography"),
+    ("آتش", "intense fire, flames, embers, dramatic heat"),
+    ("برف", "snowy landscape, winter scene, soft white snow"),
+    ("باران", "rainy atmosphere, wet surfaces, reflections"),
+    ("قلعه", "ancient castle, stone fortress, epic fantasy architecture"),
+    ("کاخ", "grand palace, ornate architecture, golden light"),
+    ("مسجد", "beautiful mosque architecture, geometric patterns, serene"),
+    ("کتاب", "ancient books, library, knowledge, warm light"),
+    ("علم", "science laboratory, glowing experiments, futuristic research"),
+    ("تکنولوژی", "advanced technology, holographic interfaces, futuristic devices"),
+    ("آینده", "futuristic world, advanced civilization, sci-fi environment"),
+    ("گذشته", "historical ancient scene, archaeological atmosphere"),
+    ("طبیعت", "pristine nature landscape, wilderness, scenic beauty"),
+    ("حیوان", "wildlife animal in natural habitat, detailed fur, photo realistic"),
+    ("گربه", "cat in natural setting, detailed fur, realistic"),
+    ("سگ", "dog in natural setting, detailed, realistic"),
+    ("پرنده", "bird in flight, detailed feathers, sky background"),
+]
+
+
 def enhance_image_prompt(prompt: str) -> str:
-    """Make short/Persian prompts usable for English-centric image models."""
+    """Build a strong English visual prompt; avoid random portraits unless asked."""
     text = (prompt or "").strip()
     if not text:
-        return "cinematic deep space nebula, stars, ultra detailed"
-    # Common Persian topic hints -> English visual phrases
-    mapping = [
-        ("جهان", "the universe, deep space, galaxies, nebula, cosmic vista"),
-        ("کهکشان", "galaxy, spiral arms, stars, nebula"),
-        ("فضا", "outer space, stars, planets, cosmic background"),
-        ("ستاره", "bright stars in the night sky, astronomy"),
-        ("ماه", "the moon, lunar surface, night sky"),
-        ("خورشید", "the sun, solar flares, space"),
-        ("دریا", "ocean waves, seascape, dramatic light"),
-        ("کوه", "mountain landscape, dramatic peaks"),
-        ("جنگل", "dense forest, sunlight through trees"),
-        ("شهر", "futuristic city skyline at night"),
-        ("ربات", "advanced robot, sci-fi character design"),
-        ("انسان", "person, portrait, realistic lighting"),
-        ("گربه", "cat, detailed fur, photo realistic"),
-        ("سگ", "dog, detailed, photo realistic"),
-        ("گل", "flowers, botanical, soft light"),
-        ("آتش", "fire, flames, dramatic"),
-        ("آب", "water, reflections, fluid"),
-        ("آسمان", "sky, clouds, atmosphere"),
-        ("شب", "night scene, moonlight"),
-        ("روز", "daylight scene, sunny"),
-    ]
-    extra = []
-    for fa, en in mapping:
+        text = "epic cosmic landscape"
+
+    person = wants_person(text)
+    extras = []
+    for fa, en in FA_IMAGE_MAP:
         if fa in text:
-            extra.append(en)
-    # If text has Arabic/Persian letters, wrap as subject description
-    has_fa = any("؀" <= ch <= "ۿ" for ch in text)
-    if has_fa:
-        core = ", ".join(extra) if extra else f"an artistic depiction of the concept: {text}"
-        return (
-            f"{core}, highly detailed, cinematic lighting, 8k concept art, "
-            f"masterpiece composition, no random face unless asked"
+            extras.append(en)
+
+    if has_persian(text):
+        if extras:
+            core = ", ".join(dict.fromkeys(extras))  # unique preserve order
+        else:
+            # transliterate-style description without inventing a face
+            core = (
+                f"a cinematic visual interpretation of the Persian concept '{text}', "
+                f"environment and scenery focused, symbolic imagery"
+            )
+    else:
+        core = text
+        if extras:
+            core = text + ", " + ", ".join(dict.fromkeys(extras))
+
+    quality = (
+        "masterpiece, best quality, ultra detailed, 8k, sharp focus, "
+        "cinematic composition, volumetric lighting, dramatic atmosphere"
+    )
+
+    if person:
+        anti = "realistic proportions, natural skin texture"
+    else:
+        # Critical: stop random anime girls / faces
+        anti = (
+            "absolutely no people, no human, no face, no portrait, no girl, no woman, "
+            "no man, no child, no anime character, no beauty portrait, empty of humans"
         )
-    # English / mixed: still boost quality a bit
-    base = text
-    if extra:
-        base = text + ", " + ", ".join(extra)
-    if len(base) < 40:
-        base += ", highly detailed, cinematic lighting, sharp focus"
-    return base[:800]
+
+    return f"{core}, {quality}, {anti}"[:900]
 
 
 def generate_image_without_user_key(prompt: str) -> dict:
-    """Real AI image via public Pollinations endpoint (no API key required).
-    Falls back to local SVG if the network call fails.
-    """
+    """AI image via Pollinations classic endpoint; SVG fallback if network fails."""
     from urllib.parse import quote
-    raw = (prompt or "cosmic art").strip()[:500] or "cosmic art"
-    text = enhance_image_prompt(raw)
-    # Pollinations public image API — no key; returns image bytes
     import hashlib
+    import base64
+
+    raw = (prompt or "").strip()[:500] or "cosmic landscape"
+    text = enhance_image_prompt(raw)
     seed = int(hashlib.md5(raw.encode("utf-8")).hexdigest()[:8], 16) % 999999
     path = quote(text, safe="")
+    # flux model + safe flags
     url = (
         "https://image.pollinations.ai/prompt/"
         + path
-        + f"?width=768&height=768&seed={seed}&nologo=true&enhance=true"
+        + f"?width=1024&height=1024&seed={seed}&nologo=true&enhance=true&model=flux"
     )
     try:
         req = Request(
             url,
-            headers={
-                "User-Agent": "KavoshAI2/2.1",
-                "Accept": "image/*,*/*",
-            },
+            headers={"User-Agent": "KavoshAI2/2.2", "Accept": "image/*,*/*"},
             method="GET",
         )
-        with urlopen(req, timeout=90) as resp:
-            data = resp.read(6_000_000)
+        with urlopen(req, timeout=120) as resp:
+            data = resp.read(8_000_000)
             ctype = (resp.headers.get("Content-Type") or "image/jpeg").split(";")[0].strip()
-        if len(data) < 500 or not ctype.startswith("image/"):
+        if len(data) < 800 or not ctype.startswith("image/"):
             raise RuntimeError("پاسخ تصویر معتبر نبود")
-        import base64
         b64 = base64.b64encode(data).decode("ascii")
         data_url = f"data:{ctype};base64,{b64}"
         return {
             "ok": True,
             "url": data_url,
             "dataUrl": data_url,
-            "provider": "pollinations",
-            "message": "تصویر با موتور AI عمومی ساخته شد (بدون کلید شما).",
+            "provider": "pollinations-flux",
+            "message": "تصویر با موتور AI ساخته شد.",
             "enhancedPrompt": text,
             "originalPrompt": raw,
         }
     except Exception as exc:
-        # offline fallback
-        data_url = svg_to_data_url(local_image_svg(text))
+        data_url = svg_to_data_url(local_image_svg(raw))
         return {
             "ok": True,
             "url": data_url,
             "dataUrl": data_url,
             "provider": "local-svg-fallback",
-            "message": f"سرویس AI تصویر در دسترس نبود ({exc}). تصویر گرافیکی محلی جایگزین شد.",
+            "message": f"سرویس AI موقتاً در دسترس نبود ({exc}). تصویر گرافیکی جایگزین شد.",
+            "enhancedPrompt": text,
+            "originalPrompt": raw,
         }
+
+
+def enhance_video_prompt(prompt: str) -> str:
+    text = (prompt or "").strip()
+    if not text:
+        text = "cinematic camera flight through the universe"
+    extras = []
+    for fa, en in FA_IMAGE_MAP:
+        if fa in text:
+            extras.append(en)
+    if has_persian(text):
+        core = ", ".join(dict.fromkeys(extras)) if extras else f"cinematic motion scene about: {text}"
+    else:
+        core = text
+    person = wants_person(text)
+    anti = "" if person else ", no people, no faces, environment and motion focus"
+    return (
+        f"{core}, smooth camera movement, cinematic lighting, high detail, "
+        f"professional video quality{anti}"
+    )[:700]
+
+
+def generate_video_without_user_key(prompt: str) -> dict:
+    """Best-effort public video generation. Returns MP4 data URL or honest error."""
+    from urllib.parse import quote
+    import hashlib
+    import base64
+
+    raw = (prompt or "").strip()[:400] or "cinematic space flight"
+    text = enhance_video_prompt(raw)
+    seed = int(hashlib.md5(raw.encode("utf-8")).hexdigest()[:8], 16) % 999999
+    path = quote(text, safe="")
+
+    candidates = [
+        f"https://gen.pollinations.ai/video/{path}?model=wan&duration=4&seed={seed}",
+        f"https://image.pollinations.ai/prompt/{path}?width=768&height=768&seed={seed}&nologo=true&model=flux",
+    ]
+    errors = []
+    # Try video endpoint first
+    try:
+        req = Request(
+            candidates[0],
+            headers={"User-Agent": "KavoshAI2/2.2", "Accept": "video/*,*/*"},
+            method="GET",
+        )
+        with urlopen(req, timeout=180) as resp:
+            data = resp.read(20_000_000)
+            ctype = (resp.headers.get("Content-Type") or "").split(";")[0].strip()
+        if data and len(data) > 2000 and ("video" in ctype or data[:4] == b"\x00\x00\x00"):
+            b64 = base64.b64encode(data).decode("ascii")
+            return {
+                "ok": True,
+                "url": f"data:video/mp4;base64,{b64}",
+                "provider": "pollinations-video",
+                "message": "ویدئو با موتور عمومی ساخته شد (ممکن است کوتاه باشد).",
+                "enhancedPrompt": text,
+                "originalPrompt": raw,
+            }
+        errors.append(f"video-endpoint ctype={ctype} size={len(data) if data else 0}")
+    except Exception as exc:
+        errors.append(f"video:{exc}")
+
+    # Fallback: generate a still cinematic frame + honest note (not fake MP4)
+    try:
+        still = generate_image_without_user_key(raw)
+        if still.get("ok") and (still.get("url") or still.get("dataUrl")):
+            return {
+                "ok": True,
+                "url": still.get("url") or still.get("dataUrl"),
+                "isStillFrame": True,
+                "provider": "image-as-preview",
+                "message": (
+                    "ویدئوی کامل از سرویس عمومی در دسترس نبود. "
+                    "یک فریم سینمایی به‌عنوان پیش‌نمایش ساخته شد. "
+                    "برای ویدئوی واقعی VIDEO_API_URL/KEY/MODEL را در env بگذارید."
+                ),
+                "enhancedPrompt": text,
+                "originalPrompt": raw,
+            }
+    except Exception as exc:
+        errors.append(f"still:{exc}")
+
+    return {
+        "ok": False,
+        "error": "ساخت ویدئو ممکن نشد. " + "; ".join(errors)[:300],
+        "setupRequired": True,
+        "hint": "VIDEO_API_URL و VIDEO_API_KEY و VIDEO_MODEL را در Environment تنظیم کنید.",
+    }
+
 
 
 def call_media(kind, prompt, client_overrides=None):
@@ -336,9 +485,11 @@ def call_media(kind, prompt, client_overrides=None):
             if bad in client_overrides:
                 pass  # discarded
     endpoint, key, model = media_config(kind)
-    # No IMAGE_* env => use public AI image endpoint (no user key), else offline SVG
+    # No IMAGE_*/VIDEO_* env => public AI endpoints (no user key)
     if kind == "تصویر" and (not endpoint or not key or not model):
         return generate_image_without_user_key(prompt)
+    if kind == "ویدئو" and (not endpoint or not key or not model):
+        return generate_video_without_user_key(prompt)
     if not endpoint or not key or not model:
         names = "IMAGE_API_URL، IMAGE_API_KEY و IMAGE_MODEL" if kind == "تصویر" else "VIDEO_API_URL، VIDEO_API_KEY و VIDEO_MODEL"
         raise ValueError(
@@ -595,6 +746,7 @@ def init_db():
                 created_at INTEGER NOT NULL
             );
             """)
+            ensure_knowledge_tables(conn)
             # Always sync canonical plan catalog (idempotent upsert)
             plan_rows = [
                 ("plus_1m", "پلاس — ۱ ماه", "۵۰٬۰۰۰ کاوش", 30,
@@ -896,7 +1048,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, {
                 "ok": True, "name": SITE_NAME, "version": "2.1.0", "provider": "openrouter", "runtime": "python",
                 "keyConfigured": bool(API_KEY), "imageConfigured": True, "imageProvider": ("api" if all(media_config("تصویر")) else "pollinations-or-local"),
-                "videoConfigured": all(media_config("ویدئو")), "managerConfigured": bool(os.getenv("MANAGER_PASSWORD")),
+                "videoConfigured": True, "videoProvider": ("api" if all(media_config("ویدئو")) else "public-or-preview"), "managerConfigured": bool(os.getenv("MANAGER_PASSWORD")),
                 "deputiesConfigured": configured_deputies(), "deputyCount": 8,
                 "teachersConfigured": configured_teachers(), "teacherCount": 10,
                 "studentsConfigured": configured_students(), "studentCount": STUDENT_MAX
@@ -994,7 +1146,7 @@ class Handler(BaseHTTPRequestHandler):
                 "ok": True, "role": role, "name": role_label(role), "label": role_label(role),
                 "keyConfigured": bool(API_KEY),
                 "imageConfigured": True, "imageProvider": ("api" if all(media_config("تصویر")) else "pollinations-or-local"),
-                "videoConfigured": all(media_config("ویدئو")),
+                "videoConfigured": True, "videoProvider": ("api" if all(media_config("ویدئو")) else "public-or-preview"),
                 "openTickets": open_tickets, "contests": contests,
                 "activity": [dict(x) for x in logs],
                 "note": "داشبورد کارکنان — عملیات حساس فقط سمت سرور بررسی می‌شود. OAuth گوگل و پرداخت واقعی فعال نیست.",
@@ -1011,13 +1163,39 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(401, {"ok": False, "error": "ورود لازم است."})
             csrf = issue_csrf()
             return self.send_json(200, {"ok": True, "csrf": csrf}, set_cookies=[(CSRF_COOKIE, csrf, SESSION_TTL)])
+
+        if path == "/api/knowledge/docs":
+            s = self.session()
+            if not s or not is_staff(str(s.get("role") or "")):
+                return self.send_json(401, {"ok": False, "error": "دسترسی کارکنان لازم است."})
+            with lock:
+                conn = db()
+                try:
+                    docs = list_documents(conn, 100)
+                finally:
+                    conn.close()
+            return self.send_json(200, {"ok": True, "documents": docs})
+
+        if path == "/api/purchases":
+            s = self.session()
+            if not s:
+                return self.send_json(401, {"ok": False, "error": "ورود لازم است."})
+            role = str(s.get("role") or "")
+            with lock:
+                conn = db()
+                try:
+                    items = list_purchases(conn, user_key=role, staff=is_staff(role), limit=100)
+                finally:
+                    conn.close()
+            return self.send_json(200, {"ok": True, "purchases": items})
+
         if path in ("/api/panel/summary", "/api/panel/summary/"):
             s = self.session()
             if not s: return self.send_json(401, {"ok": False, "error": "ابتدا وارد پنل شو."})
             return self.send_json(200, {
                 "ok": True, "role": s["role"], "site": SITE_NAME, "version": "2.1.0",
                 "aiConfigured": bool(API_KEY), "imageConfigured": True, "imageProvider": ("api" if all(media_config("تصویر")) else "pollinations-or-local"),
-                "videoConfigured": all(media_config("ویدئو")),
+                "videoConfigured": True, "videoProvider": ("api" if all(media_config("ویدئو")) else "public-or-preview"),
                 "note": "این داشبورد وضعیت سرویس و تنظیمات را نشان می‌دهد. مدیریت واقعی دانش‌آموزان، نمره‌ها و حضورغیاب هنوز پیاده‌سازی نشده است."
             })
 
@@ -1043,6 +1221,30 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(data)
             return
 
+
+        if path == "/manifest.webmanifest":
+            p = PUBLIC / "manifest.webmanifest"
+            if not p.is_file():
+                return self.send_json(404, {"ok": False, "error": "manifest missing"})
+            body = p.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/manifest+json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if path == "/sw.js":
+            p = PUBLIC / "sw.js"
+            if not p.is_file():
+                return self.send_json(404, {"ok": False, "error": "sw missing"})
+            body = p.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/javascript; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
         if path == "/": path = "/index.html"
         if path == "/index.html":
             try: body = (PUBLIC / "index.html").read_bytes()
@@ -1057,7 +1259,7 @@ class Handler(BaseHTTPRequestHandler):
             s = self.session()
             if not s: return self.send_json(401, {"ok": False, "error": "ابتدا وارد پنل شو."})
             return self.send_json(200, {"ok": True, "role": s["role"], "site": SITE_NAME, "version": "2.1.0",
-                "aiConfigured": bool(API_KEY), "imageConfigured": True, "imageProvider": ("api" if all(media_config("تصویر")) else "pollinations-or-local"), "videoConfigured": all(media_config("ویدئو")),
+                "aiConfigured": bool(API_KEY), "imageConfigured": True, "imageProvider": ("api" if all(media_config("تصویر")) else "pollinations-or-local"), "videoConfigured": True, "videoProvider": ("api" if all(media_config("ویدئو")) else "public-or-preview"),
                 "note": "این داشبورد وضعیت سرویس و تنظیمات را نشان می‌دهد. مدیریت واقعی دانش‌آموزان، نمره‌ها و حضورغیاب هنوز پیاده‌سازی نشده است."})
         if path == "/api/auth/login":
             try:
@@ -1223,8 +1425,23 @@ class Handler(BaseHTTPRequestHandler):
                     finally:
                         conn.close()
                 result = call_media(kind, prompt)
+                if isinstance(result, dict) and result.get("ok") is False:
+                    return self.send_json(503, {
+                        "ok": False,
+                        "error": result.get("error") or "ساخت رسانه ناموفق بود",
+                        "setupRequired": bool(result.get("setupRequired")),
+                        "hint": result.get("hint") or "",
+                    })
                 # normalize
                 out = {"ok": True, "jobId": job_id, "provider": result.get("provider", "configured-media-api")}
+                if result.get("message"):
+                    out["message"] = result["message"]
+                if result.get("enhancedPrompt"):
+                    out["enhancedPrompt"] = result["enhancedPrompt"]
+                if result.get("originalPrompt"):
+                    out["originalPrompt"] = result["originalPrompt"]
+                if result.get("isStillFrame"):
+                    out["isStillFrame"] = True
                 if result.get("url"):
                     out["url"] = result["url"]
                     status = "done"
@@ -1387,6 +1604,101 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, {"ok": True, "id": fid, "filename": filename, "downloadPath": f"/api/files/{fid}"})
 
 
+
+        if path == "/api/knowledge/ingest":
+            s = self.session()
+            if not s or not is_staff(str(s.get("role") or "")):
+                return self.send_json(401, {"ok": False, "error": "فقط کارکنان می‌توانند سند اضافه کنند."})
+            try:
+                body = self.read_json(600_000)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+            title = str(body.get("title") or "سند").strip()
+            content = str(body.get("content") or "")
+            source = str(body.get("source") or "").strip()
+            lang = str(body.get("lang") or "fa").strip()[:8]
+            try:
+                with lock:
+                    conn = db()
+                    try:
+                        result = ingest_document(conn, title, content, source, lang)
+                        conn.commit()
+                    finally:
+                        conn.close()
+                log_activity(str(s["role"]), "kb_ingest", result.get("id", ""))
+                return self.send_json(200, result)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+
+        if path == "/api/knowledge/search":
+            try:
+                body = self.read_json(20_000)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+            q = str(body.get("query") or body.get("q") or "").strip()
+            if not q:
+                return self.send_json(400, {"ok": False, "error": "عبارت جست‌وجو لازم است."})
+            with lock:
+                conn = db()
+                try:
+                    hits = search_chunks(conn, q, limit=int(body.get("limit") or 8))
+                finally:
+                    conn.close()
+            return self.send_json(200, {"ok": True, "query": q, "results": hits})
+
+        if path == "/api/purchases":
+            s = self.session()
+            if not s:
+                return self.send_json(401, {"ok": False, "error": "برای ثبت درخواست خرید ابتدا وارد شوید."})
+            try:
+                body = self.read_json(10_000)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+            plan_id = str(body.get("planId") or body.get("plan_id") or "").strip()[:40]
+            plan_name = str(body.get("planName") or body.get("plan_name") or plan_id).strip()[:120]
+            if not plan_id:
+                return self.send_json(400, {"ok": False, "error": "شناسه طرح لازم است."})
+            with lock:
+                conn = db()
+                try:
+                    result = create_purchase(conn, str(s["role"]), plan_id, plan_name)
+                    conn.commit()
+                finally:
+                    conn.close()
+            log_activity(str(s["role"]), "purchase_request", result.get("id", ""))
+            return self.send_json(200, {
+                **result,
+                "message": "درخواست خرید ثبت شد و برای بررسی مدیر/پشتیبانی ارسال شد. این پرداخت خودکار نیست.",
+            })
+
+
+
+        if path == "/api/purchases/update":
+            s = self.session()
+            if not s or not is_staff(str(s.get("role") or "")):
+                return self.send_json(401, {"ok": False, "error": "فقط کارکنان می‌توانند وضعیت را تغییر دهند."})
+            try:
+                body = self.read_json(10_000)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+            pid = str(body.get("id") or "").strip()
+            status = str(body.get("status") or "").strip()
+            note = str(body.get("note") or "").strip()
+            if not pid:
+                return self.send_json(400, {"ok": False, "error": "شناسه لازم است."})
+            try:
+                with lock:
+                    conn = db()
+                    try:
+                        result = update_purchase_status(conn, pid, status, note)
+                        conn.commit()
+                    finally:
+                        conn.close()
+                log_activity(str(s["role"]), "purchase_update", f"{pid}:{status}")
+                return self.send_json(200, result)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+
         if path == "/api/chat":
             if not self.rate_allowed(): return self.send_json(429, {"ok": False, "error": "درخواست‌ها خیلی زیاد شده‌اند؛ یک دقیقه بعد دوباره تلاش کن."})
             try:
@@ -1448,6 +1760,25 @@ class Handler(BaseHTTPRequestHandler):
                         messages.append({
                             "role": "system",
                             "content": "حافظهٔ ذخیره‌شده دربارهٔ این کاربر (از آن برای شخصی‌سازی پاسخ استفاده کن):\n" + mem_text,
+                        })
+                except Exception:
+                    pass
+
+                # knowledge retrieval (lexical)
+                try:
+                    with lock:
+                        conn = db()
+                        try:
+                            kb_hits = search_chunks(conn, message, limit=4)
+                        finally:
+                            conn.close()
+                    if kb_hits:
+                        kb_lines = []
+                        for h in kb_hits:
+                            kb_lines.append(f"- [{h.get('title','')}] {h.get('content','')[:280]}")
+                        messages.append({
+                            "role": "system",
+                            "content": "اطلاعات بازیابی‌شده از پایگاه دانش کاوش (در پاسخ ارجاع بده اگر مرتبط است):\n" + "\n".join(kb_lines),
                         })
                 except Exception:
                     pass
