@@ -1,0 +1,1456 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#050814">
+<title>کاوش AI 2 | Kavosh AI 2</title>
+  <meta name="theme-color" content="#0b1020">
+  <link rel="manifest" href="/manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#050814;--panel:rgba(12,18,39,.88);--line:rgba(153,177,255,.18);
+  --text:#f2f5ff;--muted:#9aa6c8;--blue:#8ba7ff;--violet:#b19aff;
+  --good:#8de7c1;--bad:#ffb4bd;--card:rgba(16,24,48,.75);
+  --shadow:0 20px 60px #0006;--radius:18px;
+  --font-fa:'Vazirmatn',Tahoma,sans-serif;--font-en:'Inter',system-ui,sans-serif;
+}
+
+[data-theme="aurora"]{--bg:#04101a;--panel:rgba(8,28,40,.9);--line:rgba(100,220,200,.25);--text:#e8fff8;--muted:#8ebdb0;--blue:#5eead4;--violet:#67e8f9;--card:rgba(10,30,40,.8)}
+[data-theme="sunset"]{--bg:#1a0a08;--panel:rgba(40,16,12,.9);--line:rgba(255,160,100,.22);--text:#fff5ee;--muted:#c4a090;--blue:#fb923c;--violet:#f472b6;--card:rgba(45,18,14,.8)}
+[data-theme="royal"]{--bg:#0a0618;--panel:rgba(24,12,48,.9);--line:rgba(200,160,255,.22);--text:#f5f0ff;--muted:#a89bc8;--blue:#a78bfa;--violet:#e879f9;--card:rgba(28,14,52,.8)}
+[data-theme="forest"]{--bg:#06140c;--panel:rgba(10,32,20,.9);--line:rgba(120,220,140,.2);--text:#ecfdf3;--muted:#86b89a;--blue:#4ade80;--violet:#34d399;--card:rgba(12,36,22,.8)}
+[data-theme="ocean"]{--bg:#041018;--panel:rgba(8,24,48,.9);--line:rgba(100,180,255,.22);--text:#eef6ff;--muted:#8aa7c4;--blue:#38bdf8;--violet:#818cf8;--card:rgba(10,28,52,.8)}
+[data-theme="rose"]{--bg:#160812;--panel:rgba(40,12,28,.9);--line:rgba(255,140,180,.22);--text:#fff0f6;--muted:#c498b0;--blue:#fb7185;--violet:#e879f9;--card:rgba(48,14,32,.8)}
+[data-theme="sand"]{--bg:#14110a;--panel:rgba(36,30,18,.92);--line:rgba(220,190,120,.22);--text:#fffbeb;--muted:#b5a888;--blue:#fbbf24;--violet:#f59e0b;--card:rgba(40,34,20,.85)}
+[data-theme="mint"]{--bg:#071412;--panel:rgba(12,36,32,.9);--line:rgba(110,230,200,.22);--text:#f0fdfa;--muted:#8bbdb0;--blue:#2dd4bf;--violet:#5eead4;--card:rgba(14,40,36,.8)}
+[data-theme="crimson"]{--bg:#14060a;--panel:rgba(40,10,16,.9);--line:rgba(255,100,120,.22);--text:#fff1f2;--muted:#c498a0;--blue:#f43f5e;--violet:#fb7185;--card:rgba(48,12,20,.8)}
+[data-theme="slate"]{--bg:#0b0f14;--panel:rgba(18,24,32,.92);--line:rgba(148,163,184,.22);--text:#f1f5f9;--muted:#94a3b8;--blue:#94a3b8;--violet:#cbd5e1;--card:rgba(22,28,36,.85)}
+
+[data-theme="light"]{
+  color-scheme:light;--bg:#eef1fb;--panel:rgba(255,255,255,.9);--line:rgba(80,100,180,.2);
+  --text:#12182b;--muted:#5a6585;--card:rgba(255,255,255,.85);--shadow:0 12px 40px #0001;
+}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 12% 8%,#1a2a5c 0,transparent 40%),
+radial-gradient(ellipse at 88% 78%,#3a2260 0,transparent 35%),var(--bg);
+color:var(--text);font-family:var(--font-fa);font-size:14px;line-height:1.6}
+[lang="en"] body,.ltr{font-family:var(--font-en)}
+#starfield{position:fixed;inset:0;z-index:0;pointer-events:none}
+.nebula{position:fixed;inset:-15%;z-index:0;pointer-events:none;
+background:radial-gradient(ellipse at 20% 30%,#2a3f8c18,transparent 40%),
+radial-gradient(ellipse at 80% 70%,#6b3aad18,transparent 35%);
+animation:nebulaDrift 30s ease-in-out infinite alternate}
+@keyframes nebulaDrift{from{transform:translate(-1%,0) scale(1)}to{transform:translate(2%,-1%) scale(1.05)}}
+.app{position:relative;z-index:1;display:grid;grid-template-columns:280px 1fr;min-height:100vh;max-width:1500px;margin:0 auto;gap:14px;padding:14px;direction:ltr}.app .main,.app .sidebar .nav button,.app .brand{direction:rtl}.sidebar .nav button{font-size:14px;padding:12px 14px;gap:12px}.sidebar .nav .icon{width:28px;font-size:20px;display:inline-flex;justify-content:center}.brand .orb{width:52px;height:52px}.brand h1{font-size:20px}
+.sidebar{border:1px solid var(--line);border-radius:24px;background:var(--panel);backdrop-filter:blur(20px);
+padding:16px;display:flex;flex-direction:column;gap:14px;box-shadow:var(--shadow);height:calc(100vh - 28px);position:sticky;top:14px}
+.brand{display:flex;align-items:center;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.orb{width:42px;height:42px;border-radius:50%;flex-shrink:0;
+background:radial-gradient(circle at 35% 30%,#fff,#8db4ff 20%,#7658d8 50%,#171a4a 75%);
+box-shadow:0 0 24px #8179ff70;animation:orbPulse 4s ease-in-out infinite}
+@keyframes orbPulse{50%{box-shadow:0 0 36px #8179ffa0;transform:scale(1.05)}}
+.brand h1{margin:0;font-size:17px;font-weight:800}.brand p{margin:2px 0 0;font-size:11px;color:var(--muted)}
+.nav{display:flex;flex-direction:column;gap:4px;flex:1;overflow:auto}
+.nav button{display:flex;align-items:center;gap:10px;width:100%;text-align:right;background:transparent;
+border:1px solid transparent;color:var(--text);border-radius:12px;padding:10px 12px;cursor:pointer;
+font:inherit;font-size:13px;transition:.2s}
+.nav button:hover{background:rgba(139,167,255,.1);border-color:var(--line)}
+.nav button.active{background:linear-gradient(135deg,rgba(139,167,255,.2),rgba(177,154,255,.15));border-color:rgba(139,167,255,.35)}
+.nav .icon{width:20px;text-align:center;opacity:.85}
+.nav-label{font-size:10px;letter-spacing:1px;color:var(--muted);padding:8px 10px 4px;text-transform:uppercase}
+.main{display:flex;flex-direction:column;gap:14px;min-width:0}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+border:1px solid var(--line);border-radius:18px;background:var(--panel);backdrop-filter:blur(16px);padding:10px 14px}
+.topbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+select,input,textarea,button.btn{font:inherit}
+select,.btn,input[type=text],input[type=password],input[type=email],textarea{
+background:rgba(8,12,28,.6);border:1px solid var(--line);border-radius:12px;color:var(--text);
+padding:10px 12px;outline:none}
+[data-theme="light"] select,[data-theme="light"] .btn,[data-theme="light"] input,[data-theme="light"] textarea{
+background:rgba(255,255,255,.9)}
+.btn{cursor:pointer;transition:.2s;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--blue);transform:translateY(-1px)}
+.btn-primary{background:linear-gradient(135deg,#6b8cff,#9b7dff);border:none;color:#fff;font-weight:600}
+.btn-primary:hover{filter:brightness(1.08)}
+.btn-ghost{background:transparent}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.page{display:none;border:1px solid var(--line);border-radius:22px;background:var(--panel);
+backdrop-filter:blur(18px);padding:20px;box-shadow:var(--shadow);min-height:70vh;animation:fadeIn .25s ease}
+.page.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.hero{display:grid;gap:16px}
+.hero h2{margin:0;font-size:26px;font-weight:800;background:linear-gradient(90deg,var(--blue),var(--violet));
+-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hero p{color:var(--muted);margin:0;max-width:560px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:16px}
+.card{border:1px solid var(--line);border-radius:var(--radius);background:var(--card);padding:16px;transition:.2s}
+.card:hover{border-color:rgba(139,167,255,.4);transform:translateY(-2px)}
+.card h3{margin:0 0 6px;font-size:15px}.card p{margin:0;color:var(--muted);font-size:12px}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;background:rgba(139,167,255,.15);color:var(--blue)}
+.badge.good{background:rgba(141,231,193,.15);color:var(--good)}
+.badge.bad{background:rgba(255,180,189,.15);color:var(--bad)}
+.chat-layout{display:grid;grid-template-columns:220px 1fr;gap:12px;height:calc(100vh - 160px);min-height:420px}
+.chat-list{border:1px solid var(--line);border-radius:14px;overflow:auto;padding:8px;background:rgba(0,0,0,.15)}
+.chat-list button{width:100%;text-align:right;background:transparent;border:none;color:var(--text);
+padding:10px;border-radius:10px;cursor:pointer;font:inherit;font-size:12px}
+.chat-list button:hover,.chat-list button.active{background:rgba(139,167,255,.12)}
+.chat-main{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.messages{flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
+.bubble{max-width:85%;padding:10px 14px;border-radius:14px;font-size:13px;white-space:pre-wrap;word-break:break-word}
+.bubble.user{align-self:flex-start;background:linear-gradient(135deg,rgba(139,167,255,.25),rgba(177,154,255,.2));border:1px solid rgba(139,167,255,.3)}
+.bubble.bot{align-self:flex-end;background:rgba(20,28,55,.8);border:1px solid var(--line)}
+.bubble .meta{font-size:10px;color:var(--muted);margin-top:4px;display:flex;justify-content:space-between;align-items:center;gap:8px}.bubble .del-msg{border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:11px;padding:2px 6px;border-radius:6px}.bubble .del-msg:hover{color:#fda4af;background:rgba(255,80,100,.12)}
+.composer{display:flex;gap:8px;padding:12px;border-top:1px solid var(--line);align-items:flex-end}
+.composer textarea{flex:1;min-height:44px;max-height:120px;resize:vertical}
+.form-grid{display:grid;gap:12px;max-width:520px}
+.form-grid label{display:grid;gap:4px;font-size:12px;color:var(--muted)}
+.alert{padding:12px 14px;border-radius:12px;border:1px solid var(--line);margin:10px 0;font-size:13px}
+.alert.warn{border-color:rgba(255,200,100,.4);background:rgba(255,200,100,.08)}
+.alert.err{border-color:rgba(255,150,160,.4);background:rgba(255,100,120,.08);color:var(--bad)}
+.alert.ok{border-color:rgba(141,231,193,.4);background:rgba(141,231,193,.08)}
+.table{width:100%;border-collapse:collapse;font-size:13px}
+.table th,.table td{padding:10px;border-bottom:1px solid var(--line);text-align:right}
+.empty{text-align:center;padding:40px;color:var(--muted)}
+.mobile-toggle{display:none;position:fixed;bottom:18px;left:18px;z-index:50;width:48px;height:48px;border-radius:50%;
+background:linear-gradient(135deg,#6b8cff,#9b7dff);border:none;color:#fff;font-size:20px;cursor:pointer;box-shadow:var(--shadow)}
+@media(max-width:900px){
+  .app{grid-template-columns:1fr;padding:10px}
+  .sidebar{position:fixed;inset:0 auto 0 0;width:min(280px,85vw);z-index:40;transform:translateX(110%);transition:.25s;height:100vh;top:0;border-radius:0}
+  [dir=ltr] .sidebar{inset:0 0 0 auto;transform:translateX(-110%)}
+  .sidebar.open{transform:translateX(0)}
+  .mobile-toggle{display:flex;align-items:center;justify-content:center}
+  .chat-layout{grid-template-columns:1fr;height:auto}
+  .chat-list{max-height:140px}
+}
+.loading::after{content:'…';animation:dots 1.2s steps(3,end) infinite}
+@keyframes dots{0%,20%{content:'.'}40%{content:'..'}60%,100%{content:'…'}}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--muted)}
+.status-dot.on{background:var(--good);box-shadow:0 0 8px var(--good)}
+</style>
+</head>
+<body>
+<canvas id="starfield"></canvas>
+<div class="nebula"></div>
+<button class="mobile-toggle" id="menuBtn" aria-label="منو">☰</button>
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="orb"></div>
+      <div>
+        <h1 data-i18n="brand">کاوش AI 2</h1>
+        <p data-i18n="tagline">دستیار هوشمند فضایی</p>
+      </div>
+    </div>
+    <div class="nav" id="nav">
+      <div class="nav-label" data-i18n="nav_main">اصلی</div>
+      <button data-page="home" class="active"><span class="icon">⌂</span><span data-i18n="nav_home">خانه</span></button>
+      <button data-page="chat"><span class="icon">💬</span><span data-i18n="nav_chat">چت هوش مصنوعی</span></button>
+      <button data-page="image"><span class="icon">🖼</span><span data-i18n="nav_image">استودیو تصویر</span></button>
+      <button data-page="video"><span class="icon">🎬</span><span data-i18n="nav_video">استودیو ویدئو</span></button>
+      <div class="nav-label" data-i18n="nav_services">خدمات</div>
+      <button data-page="tickets"><span class="icon">🎫</span><span data-i18n="nav_tickets">تیکت پشتیبانی</span></button>
+      <button data-page="voice"><span class="icon">🎙</span><span>صوتی</span></button>
+      <button data-page="support"><span class="icon">💬</span><span>پشتیبانی</span></button>
+      <button data-page="knowledge"><span class="icon">📚</span><span>دانش</span></button>
+      <button data-page="contests"><span class="icon">🏆</span><span data-i18n="nav_contests">مسابقات</span></button>
+      <button data-page="subs"><span class="icon">💎</span><span data-i18n="nav_subs">اشتراک‌ها</span></button>
+      <button data-page="notifs"><span class="icon">🔔</span><span data-i18n="nav_notifs">اعلان‌ها</span></button>
+      <div class="nav-label" data-i18n="nav_account">حساب</div>
+      <button data-page="profile"><span class="icon">👤</span><span data-i18n="nav_profile">پروفایل و تنظیمات</span></button>
+      <button data-page="admin" id="adminNav" style="display:none"><span class="icon">⚙</span><span data-i18n="nav_admin">پنل مدیریت</span></button>
+    </div>
+  </aside>
+  <div class="main">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="status-dot" id="healthDot"></span>
+        <span id="healthText" style="font-size:12px;color:var(--muted)">…</span>
+      </div>
+      <div class="topbar-actions">
+        <select id="langSelect" title="Language"></select>
+        <select id="themeSelect" title="تم">
+          <option value="dark">فضایی (پیش‌فرض)</option>
+          <option value="light">روشن</option>
+          <option value="aurora">شفق</option>
+          <option value="sunset">غروب</option>
+          <option value="royal">سلطنتی</option>
+          <option value="forest">جنگل</option>
+          <option value="ocean">اقیانوس</option>
+          <option value="rose">رز</option>
+          <option value="sand">شن</option>
+          <option value="mint">نعناع</option>
+          <option value="crimson">زرشکی</option>
+          <option value="slate">سربی</option>
+        </select>
+        <button class="btn btn-ghost" id="themeBtn" type="button">◐</button>
+        <span id="userBadge" class="badge" style="display:none"></span>
+        <button class="btn btn-ghost" id="logoutBtn" type="button" style="display:none" data-i18n="logout">خروج</button>
+      </div>
+    </div>
+
+    <!-- HOME -->
+    <section class="page active" id="page-home">
+      <div class="hero">
+        <h2 data-i18n="home_title">به کاوش AI 2 خوش آمدید</h2>
+        <p data-i18n="home_desc">پلتفرم یکپارچه چت، تولید تصویر و ویدئو، پشتیبانی و مدیریت — با تم فضایی و پشتیبانی فارسی.</p>
+      </div>
+      <div class="grid" id="featureCards"></div>
+      <div style="margin-top:20px">
+        <h3 data-i18n="recent_activity">وضعیت سرویس‌ها</h3>
+        <div class="grid" id="statusCards"></div>
+      </div>
+    </section>
+
+    <!-- CHAT -->
+    <section class="page" id="page-chat">
+      <h2 style="margin-top:0" data-i18n="nav_chat">چت هوش مصنوعی</h2>
+      <div id="chatSetup" class="alert warn" style="display:none"></div>
+      <details style="margin-bottom:10px" class="card">
+        <summary style="cursor:pointer;font-weight:600">حافظه گفتگو</summary>
+        <p style="font-size:12px;color:var(--muted)">نکته‌هایی که می‌خواهید مدل به خاطر بسپارد (سمت سرور برای کاربر واردشده / کلید guest).</p>
+        <div id="memoryList" class="empty">خالی</div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <input type="text" id="memoryInput" placeholder="یادداشت حافظه…" style="flex:1">
+          <button class="btn" type="button" id="memoryAddBtn">افزودن</button>
+          <button class="btn btn-ghost" type="button" id="memoryClearBtn">پاک‌سازی</button>
+        </div>
+      </details>
+      <div class="chat-layout">
+        <div class="chat-list">
+          <button class="btn btn-primary" id="newChatBtn" type="button" style="margin-bottom:8px;width:100%" data-i18n="new_chat">گفتگوی جدید</button>
+          <button class="btn btn-ghost" id="clearMsgsBtn" type="button" style="margin-bottom:8px;width:100%">پاک کردن پیام‌های این گفتگو</button>
+          <div id="convList"></div>
+        </div>
+        <div class="chat-main">
+          <div class="messages" id="messages"></div>
+          <div class="composer" style="flex-direction:column;align-items:stretch">
+            <div style="display:flex;gap:8px;align-items:flex-end">
+              <textarea id="chatInput" rows="2" data-i18n-placeholder="chat_placeholder" placeholder="پیام خود را بنویسید… (Enter ارسال، Shift+Enter خط جدید)"></textarea>
+              <button class="btn btn-primary" id="sendBtn" type="button" data-i18n="send">ارسال</button>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:12px;color:var(--muted)">
+              <label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="webSearchToggle"> جست‌وجوی وب با چت</label>
+              <button class="btn btn-ghost" type="button" id="searchOnlyBtn" style="padding:6px 10px">فقط جست‌وجو</button>
+              <button class="btn btn-ghost" type="button" id="voiceMicBtn" style="padding:6px 10px">میکروفون</button>
+              <button class="btn btn-ghost" type="button" id="voiceSpeakBtn" style="padding:6px 10px">پخش پاسخ</button>
+              <span id="voiceStatus" style="font-size:11px;color:var(--muted)"></span>
+              <button class="btn btn-ghost" type="button" id="saveMemoryBtn" style="padding:6px 10px">ذخیره در حافظه</button>
+              <button class="btn btn-ghost" type="button" id="makeFileBtn" style="padding:6px 10px">ساخت فایل از پاسخ</button>
+            </div>
+            <div id="searchPanel" style="display:none;margin-top:8px" class="card"></div>
+            <details class="card" style="margin-top:8px">
+              <summary style="cursor:pointer">ساخت فایل متنی دلخواه</summary>
+              <div style="display:grid;gap:8px;margin-top:8px">
+                <input type="text" id="fileNameInput" placeholder="نام فایل مثلا report.txt" value="kavosh-note.txt">
+                <textarea id="fileContentInput" rows="4" placeholder="متن فایل…"></textarea>
+                <button class="btn btn-primary" type="button" id="makeCustomFileBtn">ساخت و دانلود</button>
+                <div id="fileCreateMsg"></div>
+              </div>
+            </details>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- IMAGE -->
+    <section class="page" id="page-image">
+      <h2 style="margin-top:0" data-i18n="nav_image">استودیو تصویر</h2>
+      <div id="imgSetup" class="alert warn" style="display:none"></div>
+      <div class="form-grid">
+        <label><span data-i18n="prompt">پرامپت</span>
+          <textarea id="imgPrompt" rows="3" placeholder="توضیح تصویر مورد نظر…"></textarea>
+        </label>
+        <button class="btn btn-primary" id="imgGenBtn" type="button" data-i18n="generate">تولید تصویر</button>
+      </div>
+      <div id="imgResult" style="margin-top:16px"></div>
+      <h3 data-i18n="history">تاریخچه</h3>
+      <div id="imgHistory" class="empty" data-i18n="no_history">هنوز تصویری تولید نشده است.</div>
+    </section>
+
+    <!-- VIDEO -->
+    <section class="page" id="page-video">
+      <h2 style="margin-top:0" data-i18n="nav_video">استودیو ویدئو</h2>
+      <div id="vidSetup" class="alert warn" style="display:none"></div>
+      <div class="form-grid">
+        <label><span data-i18n="prompt">پرامپت</span>
+          <textarea id="vidPrompt" rows="3" placeholder="توضیح ویدئوی مورد نظر…"></textarea>
+        </label>
+        <button class="btn btn-primary" id="vidGenBtn" type="button" data-i18n="generate_video">تولید ویدئو</button>
+      </div>
+      <div id="vidResult" style="margin-top:16px"></div>
+    </section>
+
+    <!-- TICKETS -->
+    <section class="page" id="page-tickets">
+      <h2 style="margin-top:0" data-i18n="nav_tickets">تیکت پشتیبانی</h2>
+      <p class="alert warn" data-i18n="tickets_note">برای ایجاد تیکت باید با نقش کارکنان وارد شوید (مدیر / معاون / معلم). تیکت‌ها در حافظهٔ سمت‌کلاینت نیز ذخیره می‌شوند تا در نبود دیتابیس از دست نروند.</p>
+      <div class="form-grid">
+        <label>موضوع <input type="text" id="ticketSubject"></label>
+        <label>دسته‌بندی
+          <select id="ticketCat"><option>عمومی</option><option>فنی</option><option>پرداخت</option><option>سایر</option></select>
+        </label>
+        <label>توضیحات <textarea id="ticketDesc" rows="4"></textarea></label>
+        <button class="btn btn-primary" id="ticketSubmit" type="button">ثبت تیکت</button>
+      </div>
+      <div id="ticketList" style="margin-top:16px"></div>
+    </section>
+
+    <!-- CONTESTS -->
+    <section class="page" id="page-contests">
+      <h2 style="margin-top:0" data-i18n="nav_contests">مسابقات</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="btn" data-cf="all">همه</button>
+        <button class="btn" data-cf="upcoming">آینده</button>
+        <button class="btn" data-cf="active">فعال</button>
+        <button class="btn" data-cf="completed">پایان‌یافته</button>
+      </div>
+      <div id="contestList" class="grid"></div>
+      <div id="contestAdmin" style="display:none;margin-top:20px">
+        <h3>ایجاد مسابقه (مدیر)</h3>
+        <div class="form-grid">
+          <label>عنوان <input id="cTitle" type="text"></label>
+          <label>توضیح <textarea id="cDesc" rows="3"></textarea></label>
+          <label>قوانین <textarea id="cRules" rows="2"></textarea></label>
+          <button class="btn btn-primary" id="cCreate" type="button">ایجاد</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SUBS -->
+    <section class="page" id="page-subs">
+      <h2 style="margin-top:0" data-i18n="nav_subs">اشتراک‌ها</h2>
+      <p class="alert warn">قیمت‌ها به «کاوش» مشخص شده‌اند. پرداخت واقعی فقط با اتصال درگاه فعال می‌شود و تا آن زمان دکمهٔ خرید فقط نمایشی است.</p>
+      <div class="grid" id="planCards"></div>
+    </section>
+
+    <!-- NOTIFS -->
+    <section class="page" id="page-notifs">
+      <h2 style="margin-top:0" data-i18n="nav_notifs">اعلان‌ها</h2>
+      <div id="notifList" class="empty">اعلانی وجود ندارد.</div>
+    </section>
+
+    <!-- PROFILE -->
+    <section class="page" id="page-profile">
+      <h2 style="margin-top:0" data-i18n="nav_profile">پروفایل و تنظیمات</h2>
+      <div class="form-grid">
+        <p data-i18n="auth_note">ورود مدیر، ۸ معاون، ۱۰ معلم و تا ۳۰۰۰ دانش‌آموز — رمزها فقط از Environment/.env. ورود گوگل نیازمند پیکربندی OAuth است و در این نسخهٔ stdlib فعال نیست — برای آن باید ارائه‌دهندهٔ احراز هویت خارجی وصل شود.</p>
+        <div id="managerEnvHintProfile" class="alert warn">در حال بررسی وضعیت رمز مدیر…</div>
+        <label>نقش
+          <select id="loginRole">
+            <option value="manager">مدیر</option>
+            <option value="deputy1">معاون ۱</option>
+            <option value="deputy2">معاون ۲</option>
+            <option value="deputy3">معاون ۳</option>
+            <option value="deputy4">معاون ۴</option>
+            <option value="deputy5">معاون ۵</option>
+            <option value="deputy6">معاون ۶</option>
+            <option value="deputy7">معاون ۷</option>
+            <option value="deputy8">معاون ۸</option>
+            <option value="teacher1">معلم ۱</option>
+            <option value="teacher2">معلم ۲</option>
+            <option value="teacher3">معلم ۳</option>
+            <option value="teacher4">معلم ۴</option>
+            <option value="teacher5">معلم ۵</option>
+            <option value="teacher6">معلم ۶</option>
+            <option value="teacher7">معلم ۷</option>
+            <option value="teacher8">معلم ۸</option>
+            <option value="teacher9">معلم ۹</option>
+            <option value="teacher10">معلم ۱۰</option>
+            <option value="student">دانش‌آموز (شماره ۱ تا ۳۰۰۰)</option>
+          </select>
+        </label>
+        <label id="studentNumWrap" style="display:none">شماره دانش‌آموز (۱–۳۰۰۰)
+          <input type="number" id="studentNum" min="1" max="3000" value="1" step="1">
+        </label>
+        <label>رمز عبور <input type="password" id="loginPass"></label>
+        <button class="btn btn-primary" id="loginBtn" type="button" data-i18n="login">ورود</button>
+        <div id="loginMsg"></div>
+      </div>
+    </section>
+
+    <!-- ADMIN -->
+    
+    
+    <section class="page" id="page-voice">
+      <h2 style="margin-top:0">دستیار صوتی فارسی</h2>
+      <p class="alert">موتور گفتار مرورگر (Web Speech API). بدون کلید در کلاینت. کیفیت فارسی به مرورگر بستگی دارد.</p>
+      <div class="card">
+        <p id="voicePageStatus">آماده</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" type="button" id="voicePageMic">شروع تشخیص</button>
+          <button class="btn" type="button" id="voicePageStop">توقف</button>
+          <button class="btn" type="button" id="voicePageSpeak">پخش آخرین پاسخ چت</button>
+        </div>
+        <label style="display:block;margin-top:12px">متن تشخیص‌داده‌شده
+          <textarea id="voiceTranscript" rows="4"></textarea>
+        </label>
+        <button class="btn btn-primary" type="button" id="voiceSendChat">ارسال به چت</button>
+      </div>
+    </section>
+
+    <section class="page" id="page-support">
+      <h2 style="margin-top:0">پشتیبانی کاوش</h2>
+      <p class="alert">از این بخش می‌توانید تیکت ثبت کنید یا وضعیت درخواست خرید را ببینید. پرداخت خودکار فعال نیست.</p>
+      <div class="grid">
+        <div class="card"><h3>تیکت پشتیبانی</h3><p>از منوی تیکت موضوع را ثبت کنید.</p><button class="btn btn-primary" type="button" data-goto="tickets">رفتن به تیکت‌ها</button></div>
+        <div class="card"><h3>درخواست اشتراک</h3><p>از صفحه اشتراک‌ها طرح را انتخاب و درخواست ثبت کنید.</p><button class="btn" type="button" data-goto="subs">رفتن به اشتراک‌ها</button></div>
+        <div class="card"><h3>ورود / حساب</h3><p>برای پیگیری درخواست‌ها وارد شوید.</p><button class="btn" type="button" data-goto="profile">پروفایل</button></div>
+      </div>
+      <h3>درخواست‌های خرید من</h3>
+      <div id="myPurchases" class="empty">وارد شوید تا درخواست‌ها نمایش داده شود.</div>
+    </section>
+
+    <section class="page" id="page-knowledge">
+      <h2 style="margin-top:0">پایگاه دانش</h2>
+      <p class="alert warn">جست‌وجوی واژگانی روی اسناد ذخیره‌شده. افزودن سند فقط برای کارکنان. این نسخه برای مقیاس‌پذیری طراحی شده؛ میلیون‌ها سند از ابتدا بارگذاری نمی‌شود.</p>
+      <div class="form-grid">
+        <label>جست‌وجو در دانش <input type="text" id="kbQuery" placeholder="عبارت…"></label>
+        <button class="btn btn-primary" type="button" id="kbSearchBtn">جست‌وجو</button>
+      </div>
+      <div id="kbResults" style="margin-top:12px"></div>
+      <div id="kbIngestBox" style="display:none;margin-top:20px">
+        <h3>افزودن سند (کارکنان)</h3>
+        <div class="form-grid">
+          <label>عنوان <input id="kbTitle" type="text"></label>
+          <label>منبع <input id="kbSource" type="text"></label>
+          <label>متن <textarea id="kbContent" rows="6"></textarea></label>
+          <button class="btn btn-primary" type="button" id="kbIngestBtn">ثبت سند</button>
+          <div id="kbIngestMsg"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page" id="page-admin">
+      <h2 style="margin-top:0" data-i18n="nav_admin">پنل مدیریت</h2>
+      <div id="adminLoginGate" class="form-grid" style="max-width:420px">
+        <p class="alert warn">ورود مدیر فقط با رمز <code>MANAGER_PASSWORD</code> روی سرور. رمز در مرورگر ذخیره یا نمایش داده نمی‌شود.</p>
+        <div id="managerEnvHint" class="alert warn">در حال بررسی وضعیت رمز مدیر…</div>
+        <label>رمز مدیر <input type="password" id="adminPass" autocomplete="current-password"></label>
+        <button class="btn btn-primary" id="adminLoginBtn" type="button">ورود به پنل مدیر</button>
+        <div id="adminLoginMsg"></div>
+      </div>
+      <div id="adminPanel" style="display:none"></div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function(){
+const $ = id => document.getElementById(id);
+const TOKEN_KEY = 'kavosh_token';
+const LANG_KEY = 'kavosh_lang';
+const THEME_KEY = 'kavosh_theme';
+const LOCAL_TICKETS = 'kavosh_tickets';
+const LOCAL_CONTESTS = 'kavosh_contests_local';
+const LOCAL_CHATS = 'kavosh_chats';
+
+let token = localStorage.getItem(TOKEN_KEY) || '';
+let user = null;
+let health = {};
+let currentConv = null;
+let messages = [];
+let lang = localStorage.getItem(LANG_KEY) || 'fa';
+
+/* ---- i18n: 50 language codes; full strings for fa/en, keys for others ---- */
+const LANGS = [
+  {code:'fa',name:'فارسی',dir:'rtl'},{code:'en',name:'English',dir:'ltr'},
+  {code:'ar',name:'العربية',dir:'rtl'},{code:'tr',name:'Türkçe',dir:'ltr'},
+  {code:'de',name:'Deutsch',dir:'ltr'},{code:'fr',name:'Français',dir:'ltr'},
+  {code:'es',name:'Español',dir:'ltr'},{code:'pt',name:'Português',dir:'ltr'},
+  {code:'ru',name:'Русский',dir:'ltr'},{code:'zh',name:'中文',dir:'ltr'},
+  {code:'ja',name:'日本語',dir:'ltr'},{code:'ko',name:'한국어',dir:'ltr'},
+  {code:'hi',name:'हिन्दी',dir:'ltr'},{code:'ur',name:'اردو',dir:'rtl'},
+  {code:'id',name:'Indonesia',dir:'ltr'},{code:'ms',name:'Melayu',dir:'ltr'},
+  {code:'it',name:'Italiano',dir:'ltr'},{code:'nl',name:'Nederlands',dir:'ltr'},
+  {code:'pl',name:'Polski',dir:'ltr'},{code:'uk',name:'Українська',dir:'ltr'},
+  {code:'ro',name:'Română',dir:'ltr'},{code:'cs',name:'Čeština',dir:'ltr'},
+  {code:'sv',name:'Svenska',dir:'ltr'},{code:'no',name:'Norsk',dir:'ltr'},
+  {code:'da',name:'Dansk',dir:'ltr'},{code:'fi',name:'Suomi',dir:'ltr'},
+  {code:'el',name:'Ελληνικά',dir:'ltr'},{code:'he',name:'עברית',dir:'rtl'},
+  {code:'th',name:'ไทย',dir:'ltr'},{code:'vi',name:'Tiếng Việt',dir:'ltr'},
+  {code:'bn',name:'বাংলা',dir:'ltr'},{code:'ta',name:'தமிழ்',dir:'ltr'},
+  {code:'te',name:'తెలుగు',dir:'ltr'},{code:'ml',name:'മലയാളം',dir:'ltr'},
+  {code:'sw',name:'Kiswahili',dir:'ltr'},{code:'af',name:'Afrikaans',dir:'ltr'},
+  {code:'hu',name:'Magyar',dir:'ltr'},{code:'sk',name:'Slovenčina',dir:'ltr'},
+  {code:'bg',name:'Български',dir:'ltr'},{code:'hr',name:'Hrvatski',dir:'ltr'},
+  {code:'sr',name:'Српски',dir:'ltr'},{code:'lt',name:'Lietuvių',dir:'ltr'},
+  {code:'lv',name:'Latviešu',dir:'ltr'},{code:'et',name:'Eesti',dir:'ltr'},
+  {code:'ka',name:'ქართული',dir:'ltr'},{code:'hy',name:'Հայերեն',dir:'ltr'},
+  {code:'az',name:'Azərbaycan',dir:'ltr'},{code:'kk',name:'Қазақ',dir:'ltr'},
+  {code:'uz',name:'Oʻzbek',dir:'ltr'},{code:'ps',name:'پښتو',dir:'rtl'}
+];
+
+const I18N = {
+  fa: {
+    brand:'کاوش AI 2', tagline:'دستیار هوشمند فضایی', nav_main:'اصلی', nav_home:'خانه',
+    nav_chat:'چت هوش مصنوعی', nav_image:'استودیو تصویر', nav_video:'استودیو ویدئو',
+    nav_services:'خدمات', nav_tickets:'تیکت پشتیبانی', nav_contests:'مسابقات', nav_subs:'اشتراک‌ها',
+    nav_notifs:'اعلان‌ها', nav_account:'حساب', nav_profile:'پروفایل و تنظیمات', nav_admin:'پنل مدیریت',
+    home_title:'به کاوش AI 2 خوش آمدید', home_desc:'پلتفرم یکپارچه چت، تولید تصویر و ویدئو، پشتیبانی و مدیریت.',
+    recent_activity:'وضعیت سرویس‌ها', new_chat:'گفتگوی جدید', send:'ارسال',
+    chat_placeholder:'پیام خود را بنویسید… (Enter ارسال، Shift+Enter خط جدید)',
+    prompt:'پرامپت', generate:'تولید تصویر', generate_video:'تولید ویدئو', history:'تاریخچه',
+    no_history:'هنوز موردی ثبت نشده است.', logout:'خروج', login:'ورود',
+    auth_note:'ورود با نقش‌های مدیر، معاون و معلم از طریق رمزهای محیطی سرور.',
+    tickets_note:'تیکت‌ها نیاز به ورود دارند. در صورت نبود API، به‌صورت محلی ذخیره می‌شوند.'
+  },
+  en: {
+    brand:'Kavosh AI 2', tagline:'Space-themed AI assistant', nav_main:'Main', nav_home:'Home',
+    nav_chat:'AI Chat', nav_image:'Image Studio', nav_video:'Video Studio',
+    nav_services:'Services', nav_tickets:'Support Tickets', nav_contests:'Contests', nav_subs:'Subscriptions',
+    nav_notifs:'Notifications', nav_account:'Account', nav_profile:'Profile & Settings', nav_admin:'Admin Panel',
+    home_title:'Welcome to Kavosh AI 2', home_desc:'Unified platform for chat, image & video generation, support and management.',
+    recent_activity:'Service status', new_chat:'New chat', send:'Send',
+    chat_placeholder:'Type a message… (Enter to send, Shift+Enter newline)',
+    prompt:'Prompt', generate:'Generate image', generate_video:'Generate video', history:'History',
+    no_history:'Nothing yet.', logout:'Sign out', login:'Sign in',
+    auth_note:'Staff login via server environment passwords (manager / deputies / teachers).',
+    tickets_note:'Tickets require sign-in. Local fallback if API unavailable.'
+  }
+};
+
+function t(key){
+  const pack = I18N[lang] || I18N.en;
+  return pack[key] || I18N.en[key] || key;
+}
+
+function applyI18n(){
+  const meta = LANGS.find(l => l.code === lang) || LANGS[0];
+  document.documentElement.lang = meta.code;
+  document.documentElement.dir = meta.dir;
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.textContent = t(el.getAttribute('data-i18n'));
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    el.placeholder = t(el.getAttribute('data-i18n-placeholder'));
+  });
+}
+
+/* language selector */
+const langSelect = $('langSelect');
+LANGS.forEach(l => {
+  const o = document.createElement('option');
+  o.value = l.code; o.textContent = l.name;
+  if (l.code === lang) o.selected = true;
+  langSelect.appendChild(o);
+});
+langSelect.addEventListener('change', () => {
+  lang = langSelect.value;
+  localStorage.setItem(LANG_KEY, lang);
+  applyI18n();
+});
+
+/* theme */
+function setTheme(th){
+  document.documentElement.setAttribute('data-theme', th === 'light' ? 'light' : 'dark');
+  localStorage.setItem(THEME_KEY, th);
+}
+setTheme(localStorage.getItem(THEME_KEY) || 'dark');
+$('themeBtn').addEventListener('click', () => {
+  const cur = document.documentElement.getAttribute('data-theme');
+  setTheme(cur === 'light' ? 'dark' : 'light');
+});
+
+/* nav */
+function showPage(id){
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+  const page = $('page-' + id);
+  if (page) page.classList.add('active');
+  const btn = document.querySelector('.nav button[data-page="'+id+'"]');
+  if (btn) btn.classList.add('active');
+  $('sidebar').classList.remove('open');
+  if (id === 'admin') loadAdminWithPurchases();
+  if (id === 'subs') loadPlans();
+  if (id === 'contests') loadContests();
+  if (id === 'tickets') renderTickets();
+  if (id === 'notifs') loadNotifs();
+  if (id === 'chat') { renderMessages(); refreshMemory(); }
+}
+document.querySelectorAll('.nav button[data-page]').forEach(b => {
+  b.addEventListener('click', () => showPage(b.dataset.page));
+});
+$('menuBtn').addEventListener('click', () => $('sidebar').classList.toggle('open'));
+
+/* API helper */
+async function api(path, opts = {}){
+  const headers = Object.assign({'Content-Type':'application/json'}, opts.headers || {});
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const res = await fetch(path, Object.assign({credentials:'same-origin'}, opts, {headers}));
+  let data = {};
+  try { data = await res.json(); } catch(e) {}
+  return {status: res.status, data};
+}
+
+async function refreshHealth(){
+  try {
+    const {data} = await api('/api/health');
+    health = data || {};
+    $('healthDot').classList.toggle('on', !!data.ok);
+    $('healthText').textContent = data.ok
+      ? (data.site || 'Kavosh') + (data.keyConfigured ? ' · AI ✓' : ' · AI ⚙')
+      : 'آفلاین';
+    renderStatusCards();
+    if (!data.keyConfigured) {
+      $('chatSetup').style.display = 'block';
+      $('chatSetup').textContent = 'کلید OPENROUTER_API_KEY تنظیم نشده. چت واقعی فعال نیست.';
+    } else $('chatSetup').style.display = 'none';
+    if (data.imageProvider === 'local-svg' || !data.imageConfigured) {
+      $('imgSetup').style.display = 'block';
+      $('imgSetup').className = 'alert ok';
+      $('imgSetup').textContent = 'تصویر با موتور AI عمومی ساخته می‌شود (بدون کلید شما). با IMAGE_API_* می‌توانید ارائه‌دهندهٔ خودتان را بگذارید.';
+    } else {
+      $('imgSetup').style.display = 'block';
+      $('imgSetup').className = 'alert ok';
+      $('imgSetup').textContent = 'تصویر از API ابری (IMAGE_API_*) فعال است.';
+    }
+    if (!data.videoConfigured) {
+      $('vidSetup').style.display = 'block';
+      $('vidSetup').textContent = 'ویدئو بدون کلید عمومی تلاش می‌شود؛ اگر سرویس قطع باشد فریم پیش‌نمایش می‌آید. VIDEO_API_* برای ارائه‌دهنده اختصاصی.';
+      $('vidSetup').className = 'alert ok';
+    } else $('vidSetup').style.display = 'none';
+    const mgrMsg = data.managerConfigured
+      ? ['alert ok', 'رمز مدیر (MANAGER_PASSWORD) روی سرور تنظیم شده است.']
+      : ['alert warn', 'MANAGER_PASSWORD تنظیم نشده. در Render → Environment یا فایل .env محلی تنظیم کنید و سرور را دوباره اجرا/دیپلوی کنید.'];
+    ['managerEnvHint', 'managerEnvHintProfile'].forEach(id => {
+      const el = $(id);
+      if (el) { el.className = mgrMsg[0]; el.textContent = mgrMsg[1]; }
+    });
+  } catch(e) {
+    $('healthText').textContent = 'خطا در اتصال';
+  }
+}
+
+function renderStatusCards(){
+  const items = [
+    {title:'چت AI', ok: health.keyConfigured, note: health.keyConfigured ? 'فعال' : 'نیاز به کلید'},
+    {title:'تصویر', ok: health.imageConfigured, note: health.imageConfigured ? 'فعال' : 'پیکربندی نشده'},
+    {title:'ویدئو', ok: health.videoConfigured, note: health.videoConfigured ? 'فعال' : 'پیکربندی نشده'},
+    {title:'زمان سرور', ok: true, note: health.time ? new Date(health.time*1000).toLocaleString('fa-IR') : '—'},
+  ];
+  $('statusCards').innerHTML = items.map(i =>
+    `<div class="card"><h3>${i.title}</h3><p><span class="badge ${i.ok?'good':'bad'}">${i.note}</span></p></div>`
+  ).join('');
+}
+
+function renderFeatures(){
+  const feats = [
+    {t:'چت هوشمند', d:'گفتگو با مدل‌های OpenRouter'},
+    {t:'استودیو تصویر', d:'تولید تصویر با API سازگار'},
+    {t:'استودیو ویدئو', d:'صف تولید ویدئو'},
+    {t:'پشتیبانی', d:'تیکت و پیگیری'},
+    {t:'مسابقات', d:'مدیریت و ثبت‌نام'},
+    {t:'اشتراک', d:'پلن‌های قابل تنظیم'},
+  ];
+  $('featureCards').innerHTML = feats.map(f =>
+    `<div class="card"><h3>${f.t}</h3><p>${f.d}</p></div>`
+  ).join('');
+}
+
+/* auth */
+async function refreshMe(){
+  if (!token) { user = null; updateAuthUI(); return; }
+  const {data} = await api('/api/me');
+  if (data && data.authenticated) {
+    user = data;
+  } else {
+    token = ''; localStorage.removeItem(TOKEN_KEY); user = null;
+  }
+  updateAuthUI();
+}
+
+function updateAuthUI(){
+  const badge = $('userBadge');
+  const logout = $('logoutBtn');
+  const adminNav = $('adminNav');
+  if (user) {
+    badge.style.display = '';
+    badge.textContent = user.label || user.name || user.role;
+    logout.style.display = '';
+    const staff = user.role === 'manager' || (user.role||'').startsWith('deputy') || (user.role||'').startsWith('teacher');
+    adminNav.style.display = staff ? '' : 'none';
+    $('contestAdmin').style.display = (user.role === 'manager' || (user.role||'').startsWith('deputy')) ? '' : 'none';
+  } else {
+    badge.style.display = 'none';
+    logout.style.display = 'none';
+    adminNav.style.display = 'none';
+    $('contestAdmin').style.display = 'none';
+  }
+}
+
+$('loginRole').addEventListener('change', () => {
+  const w = $('studentNumWrap');
+  if (w) w.style.display = $('loginRole').value === 'student' ? '' : 'none';
+});
+$('loginBtn').addEventListener('click', async () => {
+  let role = $('loginRole').value;
+  if (role === 'student') {
+    const n = parseInt(($('studentNum') && $('studentNum').value) || '0', 10);
+    if (!n || n < 1 || n > 3000) {
+      $('loginMsg').innerHTML = '<div class="alert err">شماره دانش‌آموز باید بین ۱ و ۳۰۰۰ باشد.</div>';
+      return;
+    }
+    role = 'student' + n;
+  }
+  const password = $('loginPass').value;
+  $('loginMsg').textContent = '…';
+  const {data} = await api('/api/auth/login', {method:'POST', body: JSON.stringify({role, password})});
+  if (data.ok && data.token) {
+    token = data.token;
+    localStorage.setItem(TOKEN_KEY, token);
+    user = {role: data.role, name: data.name, label: data.label};
+    updateAuthUI();
+    $('loginMsg').innerHTML = '<div class="alert ok">ورود موفق</div>';
+  } else {
+    $('loginMsg').innerHTML = `<div class="alert err">${data.error || 'خطا'}</div>`;
+  }
+});
+
+$('logoutBtn').addEventListener('click', async () => {
+  await api('/api/auth/logout', {method:'POST', body:'{}'});
+  token = ''; localStorage.removeItem(TOKEN_KEY); user = null; updateAuthUI();
+  showPage('home');
+});
+
+/* chat local history */
+function loadLocalChats(){
+  try { return JSON.parse(localStorage.getItem(LOCAL_CHATS) || '[]'); } catch(e){ return []; }
+}
+function saveLocalChats(list){
+  localStorage.setItem(LOCAL_CHATS, JSON.stringify(list.slice(0, 30)));
+}
+
+function ensureConv(){
+  if (currentConv) return currentConv;
+  const id = 'c_' + Date.now();
+  currentConv = {id, title: 'گفتگوی جدید', messages: []};
+  const list = loadLocalChats();
+  list.unshift(currentConv);
+  saveLocalChats(list);
+  renderConvList();
+  return currentConv;
+}
+
+function renderConvList(){
+  const list = loadLocalChats();
+  if (!list.length) {
+    $('convList').innerHTML = '<div class="empty" style="padding:8px;font-size:12px">گفتگویی نیست</div>';
+    return;
+  }
+  $('convList').innerHTML = list.map(c =>
+    `<div class="conv-row" style="display:flex;gap:4px;align-items:center;margin-bottom:4px">` +
+    `<button type="button" data-cid="${c.id}" class="conv-open ${currentConv && currentConv.id===c.id?'active':''}" style="flex:1;text-align:right">${escapeHtml(c.title || 'گفتگو')}</button>` +
+    `<button type="button" class="btn btn-ghost del-conv" data-del-cid="${c.id}" title="حذف گفتگو" style="padding:4px 8px;font-size:11px">حذف</button>` +
+    `</div>`
+  ).join('');
+  $('convList').querySelectorAll('.conv-open').forEach(b => {
+    b.addEventListener('click', () => {
+      const list = loadLocalChats();
+      const c = list.find(x => x.id === b.getAttribute('data-cid'));
+      if (!c) return;
+      currentConv = c;
+      messages = Array.isArray(c.messages) ? c.messages.slice() : [];
+      renderMessages();
+      renderConvList();
+      persistConv();
+    });
+  });
+  $('convList').querySelectorAll('.del-conv').forEach(b => {
+    b.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const id = b.getAttribute('data-del-cid');
+      if (!confirm('این گفتگو کامل حذف شود؟')) return;
+      let list = loadLocalChats().filter(x => x.id !== id);
+      localStorage.setItem(LOCAL_CHATS, JSON.stringify(list.slice(0, 30)));
+      if (currentConv && currentConv.id === id) {
+        currentConv = null;
+        messages = [];
+        ensureConv();
+      }
+      renderConvList();
+      renderMessages();
+    });
+  });
+}
+
+function renderMessages(){
+  const box = $('messages');
+  if (!messages.length) {
+    box.innerHTML = '<div class="empty">هنوز پیامی نیست. گفتگو را شروع کنید.</div>';
+    return;
+  }
+  box.innerHTML = messages.map((m, i) =>
+    `<div class="bubble ${m.role==='user'?'user':'bot'}" data-msg-i="${i}">${escapeHtml(m.content)}` +
+    `<div class="meta"><span>${m.role==='user'?'شما':'کاوش'} · ${m.ts || ''}</span>` +
+    `<button type="button" class="del-msg" data-del-msg="${i}" title="حذف پیام">حذف</button></div></div>`
+  ).join('');
+  box.querySelectorAll('[data-del-msg]').forEach(btn => {
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const idx = parseInt(btn.getAttribute('data-del-msg'), 10);
+      if (Number.isNaN(idx) || idx < 0 || idx >= messages.length) return;
+      if (!confirm('این پیام حذف شود؟')) return;
+      messages.splice(idx, 1);
+      renderMessages();
+      persistConv();
+    });
+  });
+  box.scrollTop = box.scrollHeight;
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function persistConv(){
+  if (!currentConv) return;
+  currentConv.messages = messages;
+  if (messages[0] && currentConv.title === 'گفتگوی جدید') {
+    currentConv.title = messages[0].content.slice(0, 40);
+  }
+  const list = loadLocalChats().filter(c => c.id !== currentConv.id);
+  list.unshift(currentConv);
+  saveLocalChats(list);
+  renderConvList();
+}
+
+$('clearMsgsBtn') && $('clearMsgsBtn').addEventListener('click', () => {
+  if (!messages.length) return;
+  if (!confirm('همه پیام‌های این گفتگو پاک شود؟')) return;
+  messages = [];
+  renderMessages();
+  persistConv();
+});
+$('newChatBtn').addEventListener('click', () => {
+  currentConv = null; messages = [];
+  ensureConv(); renderMessages();
+});
+
+async function sendChat(){
+  const input = $('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+  ensureConv();
+  const ts = new Date().toLocaleTimeString('fa-IR', {hour:'2-digit',minute:'2-digit'});
+  messages.push({role:'user', content:text, ts});
+  input.value = '';
+  renderMessages();
+  persistConv();
+  $('sendBtn').disabled = true;
+  const history = messages.filter(m => m.role==='user'||m.role==='assistant'||m.role==='bot')
+    .slice(0, -1).map(m => ({role: m.role==='bot'?'assistant':m.role, content:m.content}));
+  const webSearch = !!($('webSearchToggle') && $('webSearchToggle').checked);
+  const {status, data} = await api('/api/chat', {
+    method:'POST',
+    body: JSON.stringify({message: text, history, webSearch})
+  });
+  $('sendBtn').disabled = false;
+  if (data.ok && data.answer) {
+    messages.push({role:'bot', content:data.answer, ts: new Date().toLocaleTimeString('fa-IR',{hour:'2-digit',minute:'2-digit'})});
+    if (data.searchResults && data.searchResults.length) {
+      showSearchPanel(data.searchResults, data.note || '');
+    }
+  } else {
+    messages.push({role:'bot', content: data.error || 'خطا در دریافت پاسخ', ts: ''});
+  }
+  renderMessages();
+  persistConv();
+}
+
+function showSearchPanel(results, note){
+  const pan = $('searchPanel');
+  if (!pan) return;
+  pan.style.display = '';
+  pan.innerHTML = '<strong>نتایج جست‌وجو</strong>' + (note ? '<p class="small" style="color:var(--muted)">'+escapeHtml(note)+'</p>' : '') +
+    '<ul style="padding-right:18px;margin:8px 0">' +
+    results.map(r => '<li style="margin-bottom:6px"><a href="'+escapeHtml(r.url||'#')+'" target="_blank" rel="noopener">'+escapeHtml(r.title||r.url||'')+'</a>'
+      +(r.snippet?'<div style="font-size:11px;color:var(--muted)">'+escapeHtml(r.snippet)+'</div>':'')+'</li>').join('') +
+    '</ul>';
+}
+
+async function createTextFile(filename, content){
+  const {status, data} = await api('/api/files/create', {
+    method:'POST',
+    body: JSON.stringify({filename: filename || 'kavosh.txt', content: content || ''})
+  });
+  if (data.ok && data.downloadPath) {
+    // fetch blob with auth so download always works
+    try {
+      const headers = {};
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+      const res = await fetch(data.downloadPath, {credentials:'same-origin', headers});
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = data.filename || filename || 'file.txt';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      return {ok:true, filename: data.filename};
+    } catch(e) {
+      // fallback open path
+      window.open(data.downloadPath, '_blank');
+      return {ok:true, filename: data.filename};
+    }
+  }
+  return {ok:false, error: data.error || ('خطا ' + status)};
+}
+
+$('sendBtn').addEventListener('click', sendChat);
+$('chatInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+});
+
+/* image */
+$('imgGenBtn').addEventListener('click', async () => {
+  const prompt = $('imgPrompt').value.trim();
+  if (!prompt) return;
+  $('imgResult').innerHTML = '<div class="alert loading">در حال ارسال…</div>';
+  const {data} = await api('/api/image', {method:'POST', body: JSON.stringify({prompt})});
+  if (data.ok && (data.url || data.dataUrl)) {
+    const u = data.url || data.dataUrl;
+    const note = data.message ? `<div class="alert ok">${escapeHtml(data.message)}</div>` : `<div class="alert ok">موفق</div>`;
+    const ep = data.enhancedPrompt ? `<p style="font-size:11px;color:var(--muted)">پرامپت ارسالی به مدل: ${escapeHtml(data.enhancedPrompt)}</p>` : '';
+    $('imgResult').innerHTML = note + ep + `<img src="${escapeHtml(u)}" alt="" style="max-width:100%;border-radius:12px">`;
+  } else if (data.ok && data.taskId) {
+    $('imgResult').innerHTML = `<div class="alert warn">درخواست ثبت شد (task: ${escapeHtml(String(data.taskId))}). ${escapeHtml(data.message||'')}</div>`;
+  } else {
+    $('imgResult').innerHTML = `<div class="alert err">${escapeHtml(data.error || 'خطا')}</div>`;
+  }
+});
+
+/* video */
+$('vidGenBtn').addEventListener('click', async () => {
+  const prompt = $('vidPrompt').value.trim();
+  if (!prompt) return;
+  $('vidResult').innerHTML = '<div class="alert loading">در حال ساخت ویدئو (ممکن است تا ۲ دقیقه طول بکشد)…</div>';
+  const {data} = await api('/api/video', {method:'POST', body: JSON.stringify({prompt})});
+  if (data.ok && data.url) {
+    const note = data.message ? `<div class="alert ${data.isStillFrame?'warn':'ok'}">${escapeHtml(data.message)}</div>` : '<div class="alert ok">موفق</div>';
+    const ep = data.enhancedPrompt ? `<p style="font-size:11px;color:var(--muted)">پرامپت: ${escapeHtml(data.enhancedPrompt)}</p>` : '';
+    let media = '';
+    if (data.isStillFrame || (data.url||'').startsWith('data:image')) {
+      media = `<img src="${escapeHtml(data.url)}" alt="" style="max-width:100%;border-radius:12px">`;
+    } else {
+      media = `<video src="${escapeHtml(data.url)}" controls playsinline style="max-width:100%;border-radius:12px;background:#000"></video>`;
+    }
+    $('vidResult').innerHTML = note + ep + media;
+  } else if (data.ok && data.taskId) {
+    $('vidResult').innerHTML = `<div class="alert warn">درخواست ثبت شد (task: ${escapeHtml(String(data.taskId))}). ${escapeHtml(data.message||'')}</div>`;
+  } else {
+    $('vidResult').innerHTML = `<div class="alert err">${escapeHtml(data.error || 'خطا')}${data.hint?'<br>'+escapeHtml(data.hint):''}</div>`;
+  }
+});
+
+/* tickets local */
+function getTickets(){ try{return JSON.parse(localStorage.getItem(LOCAL_TICKETS)||'[]');}catch(e){return[]} }
+function setTickets(t){ localStorage.setItem(LOCAL_TICKETS, JSON.stringify(t)); }
+
+$('ticketSubmit').addEventListener('click', async () => {
+  const subject = $('ticketSubject').value.trim();
+  const category = $('ticketCat').value;
+  const description = $('ticketDesc').value.trim();
+  if (!subject || !description) { alert('موضوع و توضیحات لازم است'); return; }
+  let id = null;
+  if (token) {
+    const {data} = await api('/api/tickets', {method:'POST', body: JSON.stringify({subject, category, description})});
+    if (data.ok && data.id) id = data.id;
+  }
+  const list = getTickets();
+  list.unshift({
+    id: id || ('T-' + Math.random().toString(16).slice(2,8).toUpperCase()),
+    subject, category, description, status:'open',
+    created: new Date().toISOString(), replies:[]
+  });
+  setTickets(list);
+  $('ticketSubject').value=''; $('ticketDesc').value='';
+  renderTickets();
+});
+
+function renderTickets(){
+  const list = getTickets();
+  if (!list.length) { $('ticketList').innerHTML = '<div class="empty">تیکتی نیست</div>'; return; }
+  $('ticketList').innerHTML = `<table class="table"><thead><tr><th>شناسه</th><th>موضوع</th><th>وضعیت</th><th>تاریخ</th></tr></thead><tbody>` +
+    list.map(t => `<tr><td>${t.id}</td><td>${escapeHtml(t.subject)}</td><td><span class="badge">${t.status}</span></td><td>${new Date(t.created).toLocaleString('fa-IR')}</td></tr>`).join('') +
+    '</tbody></table>';
+}
+
+/* contests */
+function getLocalContests(){ try{return JSON.parse(localStorage.getItem(LOCAL_CONTESTS)||'[]');}catch(e){return[]} }
+function setLocalContests(c){ localStorage.setItem(LOCAL_CONTESTS, JSON.stringify(c)); }
+
+async function loadContests(filter){
+  let items = getLocalContests();
+  try {
+    const q = filter && filter !== 'all' ? '?status='+filter : '';
+    const {data} = await api('/api/contests' + q);
+    if (data.ok && data.contests) items = data.contests.concat(items);
+  } catch(e){}
+  if (filter && filter !== 'all') items = items.filter(c => c.status === filter);
+  if (!items.length) {
+    $('contestList').innerHTML = '<div class="empty">مسابقه‌ای ثبت نشده</div>';
+    return;
+  }
+  $('contestList').innerHTML = items.map(c =>
+    `<div class="card"><h3>${escapeHtml(c.title||'')}</h3><p>${escapeHtml(c.description||'')}</p>
+     <p><span class="badge">${c.status||'upcoming'}</span></p></div>`
+  ).join('');
+}
+document.querySelectorAll('[data-cf]').forEach(b => b.addEventListener('click', () => loadContests(b.dataset.cf)));
+
+$('cCreate').addEventListener('click', async () => {
+  const title = $('cTitle').value.trim();
+  const description = $('cDesc').value.trim();
+  const rules = $('cRules').value.trim();
+  if (!title) return;
+  const {data} = await api('/api/contests', {method:'POST', body: JSON.stringify({title, description, rules, status:'upcoming'})});
+  if (data.ok) {
+    $('cTitle').value=''; $('cDesc').value=''; $('cRules').value='';
+    loadContests();
+  } else {
+    // local fallback
+    const list = getLocalContests();
+    list.unshift({id:'C-L'+Date.now(), title, description, rules, status:'upcoming'});
+    setLocalContests(list);
+    loadContests();
+  }
+});
+
+/* plans */
+async function loadPlans(){
+  const defaults = [
+    {id:'plus_1m', name:'پلاس — ۱ ماه', priceLabel:'۵۰٬۰۰۰ کاوش', features:['چت بیشتر','حافظه گفتگو','جست‌وجوی وب محدود']},
+    {id:'plus_3m', name:'پلاس — ۳ ماه', priceLabel:'۱۵۰٬۰۰۰ کاوش', features:['چت بیشتر','حافظه گفتگو','جست‌وجوی وب']},
+    {id:'diamond_1m', name:'الماس — ۱ ماه', priceLabel:'۱۲۰٬۰۰۰ کاوش', features:['همه امکانات پلاس','ساخت فایل','اولویت پاسخ']},
+    {name:'الماس — ۳ ماه', priceLabel:'۳۶۰٬۰۰۰ کاوش', features:['همه امکانات پلاس','ساخت فایل']},
+    {name:'الماس — ۶ ماه', priceLabel:'۱٬۰۰۰٬۰۰۰ کاوش', features:['همه امکانات الماس']},
+    {name:'الماس — ۱ سال', priceLabel:'۲٬۰۰۰٬۰۰۰ کاوش', features:['همه امکانات الماس','صرفه‌جویی سالانه']},
+    {name:'الماس — ۵ سال', priceLabel:'۱۰٬۰۰۰٬۰۰۰ کاوش', features:['همه امکانات الماس','بلندمدت']},
+  ];
+  let plans = defaults;
+  try {
+    const {data} = await api('/api/plans');
+    if (data.ok && data.plans && data.plans.length) plans = data.plans;
+  } catch(e){}
+  $('planCards').innerHTML = plans.map(p =>
+    `<div class="card"><h3>${escapeHtml(p.name)}</h3><p style="font-size:18px;font-weight:700;background:linear-gradient(90deg,var(--blue),var(--violet));-webkit-background-clip:text;-webkit-text-fill-color:transparent">${escapeHtml(p.priceLabel||'')}</p>
+     <p style="font-size:11px;color:var(--muted)">${p.durationDays? (p.durationDays+' روز') : ''}</p>
+     <ul style="padding-right:18px;color:var(--muted)">${(p.features||[]).map(f=>'<li>'+escapeHtml(f)+'</li>').join('')}</ul>
+     <button class="btn btn-primary" type="button" data-plan-id="${escapeHtml(p.id||p.name)}" data-plan-name="${escapeHtml(p.name)}">ثبت درخواست خرید</button></div>`
+  ).join('');
+}
+
+async function loadNotifs(){
+  try {
+    const {data} = await api('/api/notifications');
+    if (data.ok && data.notifications && data.notifications.length) {
+      $('notifList').innerHTML = data.notifications.map(n =>
+        `<div class="card"><h3>${escapeHtml(n.title)}</h3><p>${escapeHtml(n.body)}</p></div>`
+      ).join('');
+      return;
+    }
+  } catch(e){}
+  $('notifList').innerHTML = '<div class="empty">اعلانی نیست</div>';
+}
+
+async function loadAdmin(){
+  const gate = $('adminLoginGate');
+  const panel = $('adminPanel');
+  if (!user || (user.role !== 'manager' && !(user.role||'').startsWith('deputy') && !(user.role||'').startsWith('teacher'))) {
+    gate.style.display = '';
+    panel.style.display = 'none';
+    panel.innerHTML = '';
+    return;
+  }
+  gate.style.display = 'none';
+  panel.style.display = '';
+  panel.innerHTML = '<div class="alert loading">بارگذاری…</div>';
+  const {data: sum} = await api('/api/admin/summary');
+  const {data: prov} = await api('/api/admin/providers');
+  if (!sum.ok) {
+    panel.innerHTML = `<div class="alert err">${escapeHtml(sum.error||'خطا')}</div>`;
+    gate.style.display = '';
+    return;
+  }
+  const p = (prov && prov.providers) || {};
+  const chat = p.chat || {};
+  const image = p.image || {};
+  const video = p.video || {};
+  const auth = p.auth || {};
+  panel.innerHTML = `
+    <div class="grid">
+      <div class="card"><h3>نقش شما</h3><p>${escapeHtml(sum.label||sum.role)}</p></div>
+      <div class="card"><h3>تیکت باز</h3><p>${sum.openTickets||0}</p></div>
+      <div class="card"><h3>مسابقات</h3><p>${sum.contests||0}</p></div>
+      <div class="card"><h3>چت AI</h3><p><span class="badge ${sum.keyConfigured?'good':'bad'}">${sum.keyConfigured?'کلید تنظیم شده':'کلید نیست'}</span></p></div>
+    </div>
+    <h3 style="margin-top:18px">ارائه‌دهندگان (بدون افشای کلید)</h3>
+    <div class="grid">
+      <div class="card">
+        <h3>چت — OpenRouter</h3>
+        <p>مدل: <code>${escapeHtml(chat.model||'')}</code></p>
+        <p>کلید: <span class="badge ${chat.keyConfigured?'good':'bad'}">${chat.keyConfigured?'پیکربندی شده':'خیر'}</span></p>
+        <p style="font-size:11px;color:var(--muted)">${escapeHtml(chat.note||'')}</p>
+        <button class="btn" type="button" data-test="chat">آزمایش اتصال</button>
+      </div>
+      <div class="card">
+        <h3>تصویر</h3>
+        <p>endpoint: ${image.endpointConfigured?escapeHtml(image.endpointHost||'yes'):'—'}</p>
+        <p>مدل: <code>${escapeHtml(image.model||'')}</code></p>
+        <p>کلید: <span class="badge ${image.keyConfigured?'good':'bad'}">${image.keyConfigured?'پیکربندی شده':'خیر'}</span></p>
+        <button class="btn" type="button" data-test="image">بررسی تنظیمات</button>
+      </div>
+      <div class="card">
+        <h3>ویدئو</h3>
+        <p>endpoint: ${video.endpointConfigured?escapeHtml(video.endpointHost||'yes'):'—'}</p>
+        <p>مدل: <code>${escapeHtml(video.model||'')}</code></p>
+        <p>کلید: <span class="badge ${video.keyConfigured?'good':'bad'}">${video.keyConfigured?'پیکربندی شده':'خیر'}</span></p>
+        <button class="btn" type="button" data-test="video">بررسی تنظیمات</button>
+      </div>
+      <div class="card">
+        <h3>احراز هویت</h3>
+        <p>مدیر: <span class="badge ${auth.managerConfigured?'good':'bad'}">${auth.managerConfigured?'رمز تنظیم شده':'تنظیم نشده'}</span></p>
+        <p>معاون‌ها: ${auth.deputiesConfigured||0}/${auth.deputyCount||8}</p>
+        <p>معلم‌ها: ${auth.teachersConfigured||0}/${auth.teacherCount||10}</p>
+        <p>دانش‌آموزان پیکربندی‌شده: ${auth.studentsConfigured||0} / ${auth.studentCount||3000}</p>
+        <p style="font-size:11px;color:var(--muted)">${escapeHtml(auth.studentPasswordNote||'رمز فقط از STUDENT_n_PASSWORD در env')}</p>
+        <p style="font-size:11px;color:var(--muted)">${escapeHtml(auth.googleOAuthNote||'')}</p>
+        <p style="font-size:11px;color:var(--muted)">${escapeHtml(auth.xaiGrokNote||'')}</p>
+      </div>
+    </div>
+    <div id="adminTestMsg" style="margin-top:12px"></div>
+    <h3>فعالیت اخیر</h3>
+    <div>${(sum.activity||[]).map(a=>`<div class="card" style="margin-bottom:8px"><strong>${escapeHtml(a.actor||'')}</strong> — ${escapeHtml(a.action||'')} <span class="badge">${escapeHtml(a.detail||'')}</span></div>`).join('')||'<div class="empty">—</div>'}</div>
+    <p class="alert warn" style="margin-top:16px">تغییر مدل/کلید فقط از Environment سرویس میزبانی (مثل Render) ممکن است. این برنامه نمی‌تواند متغیرهای Render را از داخل تغییر دهد؛ پس از تغییر env معمولاً Redeploy لازم است.</p>
+  `;
+  panel.querySelectorAll('[data-test]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const kind = btn.getAttribute('data-test');
+      $('adminTestMsg').innerHTML = '<div class="alert loading">در حال آزمایش…</div>';
+      let csrf = '';
+      try {
+        const {data: c} = await api('/api/admin/csrf');
+        if (c.ok) csrf = c.csrf || '';
+      } catch(e){}
+      const {data} = await api('/api/admin/test-connection', {
+        method:'POST',
+        headers: csrf ? {'X-CSRF-Token': csrf} : {},
+        body: JSON.stringify({kind, csrf})
+      });
+      if (data.ok) {
+        $('adminTestMsg').innerHTML = `<div class="alert ok">${escapeHtml(data.message||'موفق')}</div>`;
+      } else {
+        $('adminTestMsg').innerHTML = `<div class="alert err">${escapeHtml(data.error||'ناموفق')}</div>`;
+      }
+    });
+  });
+}
+
+/* starfield */
+const canvas = $('starfield'), ctx = canvas.getContext('2d');
+let w=0,h=0,stars=[],last=0;
+function resize(){
+  const dpr = Math.min(devicePixelRatio||1, 2);
+  w = innerWidth; h = innerHeight;
+  canvas.width = w*dpr; canvas.height = h*dpr;
+  canvas.style.width = w+'px'; canvas.style.height = h+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  stars = Array.from({length: Math.min(220, Math.floor(w*h/6000))}, () => ({
+    x: Math.random()*w, y: Math.random()*h, r: Math.random()*1.2+.2,
+    speed: Math.random()*.2+.03, alpha: Math.random()*.6+.2, phase: Math.random()*6.28, layer: Math.random()
+  }));
+}
+function draw(t){
+  const dt = Math.min((t-last)/16.67||1, 2); last = t;
+  ctx.clearRect(0,0,w,h);
+  for (const s of stars) {
+    s.y += s.speed * dt * (0.5 + s.layer);
+    s.phase += 0.01 * dt;
+    if (s.y > h+2) { s.y = -2; s.x = Math.random()*w; }
+    const a = Math.max(0.1, Math.min(0.95, s.alpha + Math.sin(s.phase)*0.15));
+    ctx.beginPath();
+    ctx.fillStyle = `rgba(210,220,255,${a})`;
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+    ctx.fill();
+  }
+  requestAnimationFrame(draw);
+}
+window.addEventListener('resize', resize);
+resize(); requestAnimationFrame(draw);
+
+
+
+async function refreshMemory(){
+  const box = $('memoryList');
+  if (!box) return;
+  try {
+    const {data} = await api('/api/memory');
+    if (!data.ok || !(data.notes||[]).length) { box.innerHTML = '<div class="empty">خالی</div>'; return; }
+    box.innerHTML = data.notes.map(n => `<div class="card" style="margin-bottom:6px;padding:10px">${escapeHtml(n.note)}</div>`).join('');
+  } catch(e) { box.innerHTML = '<div class="empty">خطا</div>'; }
+}
+$('memoryAddBtn') && $('memoryAddBtn').addEventListener('click', async () => {
+  const note = ($('memoryInput').value||'').trim();
+  if (!note) return;
+  await api('/api/memory', {method:'POST', body: JSON.stringify({action:'add', note})});
+  $('memoryInput').value = '';
+  refreshMemory();
+});
+$('memoryClearBtn') && $('memoryClearBtn').addEventListener('click', async () => {
+  await api('/api/memory', {method:'POST', body: JSON.stringify({action:'clear'})});
+  refreshMemory();
+});
+$('saveMemoryBtn') && $('saveMemoryBtn').addEventListener('click', async () => {
+  const lastUser = [...messages].reverse().find(m => m.role==='user');
+  if (!lastUser) { alert('پیامی نیست'); return; }
+  await api('/api/memory', {method:'POST', body: JSON.stringify({action:'add', note: lastUser.content.slice(0,500)})});
+  refreshMemory();
+  alert('در حافظه ذخیره شد');
+});
+$('makeFileBtn') && $('makeFileBtn').addEventListener('click', async () => {
+  const lastBot = [...messages].reverse().find(m => m.role==='bot' || m.role==='assistant');
+  if (!lastBot) { alert('اول یک پاسخ از چت بگیرید، یا از بخش «ساخت فایل متنی دلخواه» استفاده کنید.'); return; }
+  const r = await createTextFile('kavosh-response.txt', lastBot.content);
+  if (r.ok) alert('فایل ساخته و دانلود شد: ' + (r.filename||''));
+  else alert(r.error || 'خطا در ساخت فایل');
+});
+$('makeCustomFileBtn') && $('makeCustomFileBtn').addEventListener('click', async () => {
+  const name = ($('fileNameInput').value||'kavosh-note.txt').trim();
+  const content = $('fileContentInput').value||'';
+  if (!content.trim()) { $('fileCreateMsg').innerHTML = '<div class="alert err">متن فایل خالی است</div>'; return; }
+  $('fileCreateMsg').innerHTML = '<div class="alert loading">در حال ساخت…</div>';
+  const r = await createTextFile(name, content);
+  if (r.ok) $('fileCreateMsg').innerHTML = '<div class="alert ok">فایل آماده و دانلود شد</div>';
+  else $('fileCreateMsg').innerHTML = '<div class="alert err">'+escapeHtml(r.error||'خطا')+'</div>';
+});
+$('searchOnlyBtn') && $('searchOnlyBtn').addEventListener('click', async () => {
+  const q = ($('chatInput').value||'').trim();
+  if (!q) { alert('عبارت جست‌وجو را در کادر پیام بنویسید'); return; }
+  const pan = $('searchPanel');
+  if (pan) { pan.style.display=''; pan.innerHTML = '<div class="alert loading">در حال جست‌وجو…</div>'; }
+  const {status, data} = await api('/api/web-search', {method:'POST', body: JSON.stringify({query:q, limit:6})});
+  if (data.ok && data.results && data.results.length) {
+    showSearchPanel(data.results, 'جست‌وجوی مستقیم (بدون نیاز به کلید AI)');
+    messages.push({role:'bot', content: 'نتایج جست‌وجو برای: ' + q + '\n' + data.results.map((r,i)=> (i+1)+'. '+(r.title||'')+'\n'+(r.url||'')).join('\n'), ts:''});
+    renderMessages(); persistConv();
+  } else {
+    if (pan) pan.innerHTML = '<div class="alert err">'+escapeHtml(data.error||'نتیجه‌ای یافت نشد')+'</div>';
+    alert(data.error || 'جست‌وجو نتیجه‌ای نداد');
+  }
+});
+
+
+$('adminLoginBtn').addEventListener('click', async () => {
+  const password = $('adminPass').value;
+  $('adminLoginMsg').textContent = '…';
+  const {status, data} = await api('/api/auth/login', {method:'POST', body: JSON.stringify({role:'manager', password})});
+  if (data.ok && data.token) {
+    token = data.token;
+    localStorage.setItem(TOKEN_KEY, token);
+    user = {role: data.role, name: data.name, label: data.label};
+    updateAuthUI();
+    $('adminPass').value = '';
+    $('adminLoginMsg').innerHTML = '<div class="alert ok">ورود موفق</div>';
+    loadAdmin();
+  } else {
+    $('adminLoginMsg').innerHTML = `<div class="alert err">${escapeHtml(data.error||'خطا')}</div>`;
+  }
+});
+
+
+const THEMES = ['dark','light','aurora','sunset','royal','forest','ocean','rose','sand','mint','crimson','slate'];
+function applyTheme(name){
+  if (!THEMES.includes(name)) name = 'dark';
+  document.documentElement.setAttribute('data-theme', name === 'dark' ? 'dark' : name);
+  if (name === 'dark') document.documentElement.removeAttribute('data-theme');
+  if (name === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  localStorage.setItem(THEME_KEY, name);
+  const sel = $('themeSelect');
+  if (sel) sel.value = name;
+}
+(function initTheme(){
+  const saved = localStorage.getItem(THEME_KEY) || 'dark';
+  applyTheme(saved);
+})();
+$('themeSelect') && $('themeSelect').addEventListener('change', () => applyTheme($('themeSelect').value));
+$('themeBtn') && $('themeBtn').addEventListener('click', () => {
+  const cur = localStorage.getItem(THEME_KEY) || 'dark';
+  applyTheme(cur === 'light' ? 'dark' : 'light');
+});
+
+document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => showPage(b.getAttribute('data-goto'))));
+
+async function loadPurchases(){
+  const box = $('myPurchases');
+  if (!box) return;
+  if (!token) { box.innerHTML = '<div class="empty">برای مشاهده درخواست‌ها وارد شوید.</div>'; return; }
+  const {data} = await api('/api/purchases');
+  if (!data.ok || !(data.purchases||[]).length) { box.innerHTML = '<div class="empty">درخواستی ثبت نشده</div>'; return; }
+  box.innerHTML = `<table class="table"><thead><tr><th>شناسه</th><th>طرح</th><th>وضعیت</th></tr></thead><tbody>` +
+    data.purchases.map(p => `<tr><td>${escapeHtml(p.id)}</td><td>${escapeHtml(p.plan_name||p.plan_id)}</td><td><span class="badge">${escapeHtml(p.status)}</span></td></tr>`).join('') +
+    '</tbody></table>';
+}
+
+// plan purchase delegation
+document.addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('[data-plan-id]');
+  if (!btn) return;
+  if (!token) { alert('ابتدا وارد شوید (پروفایل).'); showPage('profile'); return; }
+  btn.disabled = true;
+  const {data} = await api('/api/purchases', {
+    method: 'POST',
+    body: JSON.stringify({ planId: btn.getAttribute('data-plan-id'), planName: btn.getAttribute('data-plan-name') })
+  });
+  btn.disabled = false;
+  if (data.ok) {
+    alert(data.message || ('درخواست ثبت شد: ' + (data.id||'')));
+    loadPurchases();
+  } else {
+    alert(data.error || 'خطا');
+  }
+});
+
+$('kbSearchBtn') && $('kbSearchBtn').addEventListener('click', async () => {
+  const q = ($('kbQuery').value||'').trim();
+  if (!q) return;
+  $('kbResults').innerHTML = '<div class="alert loading">جست‌وجو…</div>';
+  const {data} = await api('/api/knowledge/search', {method:'POST', body: JSON.stringify({query:q})});
+  if (!data.ok || !(data.results||[]).length) {
+    $('kbResults').innerHTML = '<div class="empty">نتیجه‌ای نیست. اسناد را از حساب کارکنان اضافه کنید.</div>';
+    return;
+  }
+  $('kbResults').innerHTML = data.results.map(r =>
+    `<div class="card"><h3>${escapeHtml(r.title||'')}</h3><p style="font-size:12px">${escapeHtml(r.content||'')}</p>
+     <p class="badge">امتیاز ${r.score||0}</p></div>`
+  ).join('');
+});
+$('kbIngestBtn') && $('kbIngestBtn').addEventListener('click', async () => {
+  const {data} = await api('/api/knowledge/ingest', {
+    method:'POST',
+    body: JSON.stringify({
+      title: ($('kbTitle').value||'').trim(),
+      source: ($('kbSource').value||'').trim(),
+      content: ($('kbContent').value||'').trim(),
+      lang: 'fa'
+    })
+  });
+  if (data.ok) {
+    $('kbIngestMsg').innerHTML = `<div class="alert ok">${data.duplicate?'سند تکراری بود':'ثبت شد'} — ${escapeHtml(data.id||'')}</div>`;
+  } else {
+    $('kbIngestMsg').innerHTML = `<div class="alert err">${escapeHtml(data.error||'خطا')}</div>`;
+  }
+});
+
+const _showPage = showPage;
+showPage = function(id){
+  _showPage(id);
+  if (id === 'support') loadPurchases();
+  if (id === 'knowledge') {
+    const box = $('kbIngestBox');
+    if (box) box.style.display = (user && (user.role==='manager' || (user.role||'').startsWith('deputy') || (user.role||'').startsWith('teacher'))) ? '' : 'none';
+  }
+};
+
+
+async function loadAdminPurchases(into){
+  if (!into) return;
+  const {data} = await api('/api/purchases');
+  if (!data.ok) { into.innerHTML = '<div class="alert err">خطا در بارگذاری</div>'; return; }
+  const rows = data.purchases || [];
+  if (!rows.length) { into.innerHTML = '<div class="empty">درخواستی نیست</div>'; return; }
+  into.innerHTML = '<table class="table"><thead><tr><th>شناسه</th><th>کاربر</th><th>طرح</th><th>وضعیت</th><th>عمل</th></tr></thead><tbody>' +
+    rows.map(p => '<tr><td>'+escapeHtml(p.id)+'</td><td>'+escapeHtml(p.user_key||'')+'</td><td>'+escapeHtml(p.plan_name||p.plan_id)+'</td><td>'+escapeHtml(p.status)+'</td><td>'+
+      '<button class="btn" type="button" data-pr="'+escapeHtml(p.id)+'" data-st="approved">تأیید</button> '+
+      '<button class="btn btn-ghost" type="button" data-pr="'+escapeHtml(p.id)+'" data-st="rejected">رد</button></td></tr>').join('') +
+    '</tbody></table>';
+}
+async function loadAdminWithPurchases(){
+  await loadAdmin();
+  const panel = $('adminPanel');
+  if (!panel || panel.style.display === 'none') return;
+  let box = $('adminPurchasesBox');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'adminPurchasesBox';
+    box.className = 'card';
+    box.style.marginTop = '16px';
+    box.innerHTML = '<h3>درخواست‌های خرید اشتراک</h3><div id="adminPurchasesInner">...</div>';
+    panel.appendChild(box);
+  }
+  await loadAdminPurchases($('adminPurchasesInner'));
+}
+document.addEventListener('click', async (ev) => {
+  const b = ev.target.closest('[data-pr][data-st]');
+  if (!b) return;
+  const {data} = await api('/api/purchases/update', {method:'POST', body: JSON.stringify({id:b.getAttribute('data-pr'), status:b.getAttribute('data-st')})});
+  if (!data.ok) alert(data.error||'خطا');
+  else loadAdminWithPurchases();
+});
+
+let _recog = null;
+function setVoiceStatus(t){ ['voiceStatus','voicePageStatus'].forEach(id=>{const el=$(id); if(el) el.textContent=t;}); }
+function startVoice(targetInput){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { setVoiceStatus('مرورگر پشتیبانی نمی‌کند'); alert('Chrome را امتحان کنید'); return; }
+  if (_recog) { try{_recog.stop();}catch(e){} }
+  _recog = new SR();
+  _recog.lang = 'fa-IR';
+  _recog.interimResults = true;
+  setVoiceStatus('گوش می‌دهم…');
+  _recog.onresult = (ev) => {
+    let text='';
+    for (let i=0;i<ev.results.length;i++) text += ev.results[i][0].transcript;
+    if (targetInput) targetInput.value = text;
+    const vt=$('voiceTranscript'); if (vt) vt.value=text;
+    setVoiceStatus('تشخیص شد');
+  };
+  _recog.onerror = (ev) => setVoiceStatus('خطا: '+(ev.error||''));
+  _recog.onend = () => setVoiceStatus('پایان');
+  try { _recog.start(); } catch(e){ setVoiceStatus('خطای میکروفون'); }
+}
+function stopVoice(){ try{_recog&&_recog.stop();}catch(e){} setVoiceStatus('متوقف'); }
+function speakText(text){
+  if (!window.speechSynthesis) { alert('پخش پشتیبانی نمی‌شود'); return; }
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text||'');
+  u.lang = 'fa-IR';
+  const fa = speechSynthesis.getVoices().find(v => (v.lang||'').startsWith('fa'));
+  if (fa) u.voice = fa;
+  setVoiceStatus('پخش…');
+  u.onend = () => setVoiceStatus('پخش تمام');
+  speechSynthesis.speak(u);
+}
+$('voiceMicBtn') && $('voiceMicBtn').addEventListener('click', () => startVoice($('chatInput')));
+$('voiceSpeakBtn') && $('voiceSpeakBtn').addEventListener('click', () => {
+  const last=[...messages].reverse().find(m=>m.role==='bot'||m.role==='assistant');
+  if(!last){alert('پاسخی نیست');return;} speakText(last.content);
+});
+$('voicePageMic') && $('voicePageMic').addEventListener('click', () => startVoice($('voiceTranscript')));
+$('voicePageStop') && $('voicePageStop').addEventListener('click', stopVoice);
+$('voicePageSpeak') && $('voicePageSpeak').addEventListener('click', () => {
+  const last=[...messages].reverse().find(m=>m.role==='bot'||m.role==='assistant');
+  speakText(last?last.content:(($('voiceTranscript')&&$('voiceTranscript').value)||''));
+});
+$('voiceSendChat') && $('voiceSendChat').addEventListener('click', () => {
+  const t=(($('voiceTranscript')&&$('voiceTranscript').value)||'').trim();
+  if(!t) return; showPage('chat'); $('chatInput').value=t; sendChat();
+});
+if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js').catch(()=>{}); }
+
+/* init */
+applyI18n();
+renderFeatures();
+renderConvList();
+refreshHealth();
+refreshMe();
+setInterval(refreshHealth, 60000);
+})();
+</script>
+</body>
+</html>
