@@ -3,9 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#0b1020">
+<meta name="theme-color" content="#050814">
 <title>کاوش AI 2 | Kavosh AI 2</title>
-<link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0b1020">
+  <link rel="manifest" href="/manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -17,6 +18,7 @@
   --shadow:0 20px 60px #0006;--radius:18px;
   --font-fa:'Vazirmatn',Tahoma,sans-serif;--font-en:'Inter',system-ui,sans-serif;
 }
+
 [data-theme="aurora"]{--bg:#04101a;--panel:rgba(8,28,40,.9);--line:rgba(100,220,200,.25);--text:#e8fff8;--muted:#8ebdb0;--blue:#5eead4;--violet:#67e8f9;--card:rgba(10,30,40,.8)}
 [data-theme="sunset"]{--bg:#1a0a08;--panel:rgba(40,16,12,.9);--line:rgba(255,160,100,.22);--text:#fff5ee;--muted:#c4a090;--blue:#fb923c;--violet:#f472b6;--card:rgba(45,18,14,.8)}
 [data-theme="royal"]{--bg:#0a0618;--panel:rgba(24,12,48,.9);--line:rgba(200,160,255,.22);--text:#f5f0ff;--muted:#a89bc8;--blue:#a78bfa;--violet:#e879f9;--card:rgba(28,14,52,.8)}
@@ -27,12 +29,12 @@
 [data-theme="mint"]{--bg:#071412;--panel:rgba(12,36,32,.9);--line:rgba(110,230,200,.22);--text:#f0fdfa;--muted:#8bbdb0;--blue:#2dd4bf;--violet:#5eead4;--card:rgba(14,40,36,.8)}
 [data-theme="crimson"]{--bg:#14060a;--panel:rgba(40,10,16,.9);--line:rgba(255,100,120,.22);--text:#fff1f2;--muted:#c498a0;--blue:#f43f5e;--violet:#fb7185;--card:rgba(48,12,20,.8)}
 [data-theme="slate"]{--bg:#0b0f14;--panel:rgba(18,24,32,.92);--line:rgba(148,163,184,.22);--text:#f1f5f9;--muted:#94a3b8;--blue:#94a3b8;--violet:#cbd5e1;--card:rgba(22,28,36,.85)}
+
 [data-theme="light"]{
   color-scheme:light;--bg:#eef1fb;--panel:rgba(255,255,255,.9);--line:rgba(80,100,180,.2);
   --text:#12182b;--muted:#5a6585;--card:rgba(255,255,255,.85);--shadow:0 12px 40px #0001;
 }
-*{box-sizing:border-box}
-html{scroll-behavior:smooth}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
 body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 12% 8%,#1a2a5c 0,transparent 40%),
 radial-gradient(ellipse at 88% 78%,#3a2260 0,transparent 35%),var(--bg);
 color:var(--text);font-family:var(--font-fa);font-size:14px;line-height:1.6}
@@ -43,11 +45,7 @@ background:radial-gradient(ellipse at 20% 30%,#2a3f8c18,transparent 40%),
 radial-gradient(ellipse at 80% 70%,#6b3aad18,transparent 35%);
 animation:nebulaDrift 30s ease-in-out infinite alternate}
 @keyframes nebulaDrift{from{transform:translate(-1%,0) scale(1)}to{transform:translate(2%,-1%) scale(1.05)}}
-.app{position:relative;z-index:1;display:grid;grid-template-columns:280px 1fr;min-height:100vh;max-width:1500px;margin:0 auto;gap:14px;padding:14px;direction:ltr}
-.app .main,.app .sidebar .nav button,.app .brand{direction:rtl}
-.sidebar .nav button{font-size:14px;padding:12px 14px;gap:12px}
-.sidebar .nav .icon{width:28px;font-size:20px;display:inline-flex;justify-content:center}
-.brand .orb{width:52px;height:52px}.brand h1{font-size:20px}
+.app{position:relative;z-index:1;display:grid;grid-template-columns:280px 1fr;min-height:100vh;max-width:1500px;margin:0 auto;gap:14px;padding:14px;direction:ltr}.app .main,.app .sidebar .nav button,.app .brand{direction:rtl}.sidebar .nav button{font-size:14px;padding:12px 14px;gap:12px}.sidebar .nav .icon{width:28px;font-size:20px;display:inline-flex;justify-content:center}.brand .orb{width:52px;height:52px}.brand h1{font-size:20px}
 .sidebar{border:1px solid var(--line);border-radius:24px;background:var(--panel);backdrop-filter:blur(20px);
 padding:16px;display:flex;flex-direction:column;gap:14px;box-shadow:var(--shadow);height:calc(100vh - 28px);position:sticky;top:14px}
 .brand{display:flex;align-items:center;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--line)}
@@ -105,9 +103,7 @@ padding:10px;border-radius:10px;cursor:pointer;font:inherit;font-size:12px}
 .bubble{max-width:85%;padding:10px 14px;border-radius:14px;font-size:13px;white-space:pre-wrap;word-break:break-word}
 .bubble.user{align-self:flex-start;background:linear-gradient(135deg,rgba(139,167,255,.25),rgba(177,154,255,.2));border:1px solid rgba(139,167,255,.3)}
 .bubble.bot{align-self:flex-end;background:rgba(20,28,55,.8);border:1px solid var(--line)}
-.bubble .meta{font-size:10px;color:var(--muted);margin-top:4px;display:flex;justify-content:space-between;align-items:center;gap:8px}
-.bubble .del-msg{border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:11px;padding:2px 6px;border-radius:6px}
-.bubble .del-msg:hover{color:#fda4af;background:rgba(255,80,100,.12)}
+.bubble .meta{font-size:10px;color:var(--muted);margin-top:4px;display:flex;justify-content:space-between;align-items:center;gap:8px}.bubble .del-msg{border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:11px;padding:2px 6px;border-radius:6px}.bubble .del-msg:hover{color:#fda4af;background:rgba(255,80,100,.12)}
 .composer{display:flex;gap:8px;padding:12px;border-top:1px solid var(--line);align-items:flex-end}
 .composer textarea{flex:1;min-height:44px;max-height:120px;resize:vertical}
 .form-grid{display:grid;gap:12px;max-width:520px}
@@ -134,8 +130,6 @@ background:linear-gradient(135deg,#6b8cff,#9b7dff);border:none;color:#fff;font-s
 @keyframes dots{0%,20%{content:'.'}40%{content:'..'}60%,100%{content:'…'}}
 .status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--muted)}
 .status-dot.on{background:var(--good);box-shadow:0 0 8px var(--good)}
-#fatalError{position:fixed;top:0;left:0;right:0;background:#b91c1c;color:#fff;padding:14px 20px;z-index:99999;
-font-family:Tahoma,sans-serif;direction:rtl;text-align:right;box-shadow:0 2px 10px rgba(0,0,0,.4)}
 </style>
 </head>
 <body>
@@ -162,6 +156,8 @@ font-family:Tahoma,sans-serif;direction:rtl;text-align:right;box-shadow:0 2px 10
       <button data-page="voice"><span class="icon">🎙</span><span>صوتی</span></button>
       <button data-page="support"><span class="icon">💬</span><span>پشتیبانی</span></button>
       <button data-page="knowledge"><span class="icon">📚</span><span>دانش</span></button>
+      <button data-page="news"><span class="icon">📰</span><span>اخبار کاوش</span></button>
+      <button data-page="channel"><span class="icon">📺</span><span>کاوش ویدیو</span></button>
       <button data-page="contests"><span class="icon">🏆</span><span data-i18n="nav_contests">مسابقات</span></button>
       <button data-page="subs"><span class="icon">💎</span><span data-i18n="nav_subs">اشتراک‌ها</span></button>
       <button data-page="notifs"><span class="icon">🔔</span><span data-i18n="nav_notifs">اعلان‌ها</span></button>
@@ -192,12 +188,13 @@ font-family:Tahoma,sans-serif;direction:rtl;text-align:right;box-shadow:0 2px 10
           <option value="crimson">زرشکی</option>
           <option value="slate">سربی</option>
         </select>
-        <button class="btn btn-ghost" id="themeBtn" type="button" title="تغییر سریع روشن/تیره">◐</button>
+        <button class="btn btn-ghost" id="themeBtn" type="button">◐</button>
         <span id="userBadge" class="badge" style="display:none"></span>
         <button class="btn btn-ghost" id="logoutBtn" type="button" style="display:none" data-i18n="logout">خروج</button>
       </div>
     </div>
 
+    <!-- HOME -->
     <section class="page active" id="page-home">
       <div class="hero">
         <h2 data-i18n="home_title">به کاوش AI 2 خوش آمدید</h2>
@@ -210,6 +207,7 @@ font-family:Tahoma,sans-serif;direction:rtl;text-align:right;box-shadow:0 2px 10
       </div>
     </section>
 
+    <!-- CHAT -->
     <section class="page" id="page-chat">
       <h2 style="margin-top:0" data-i18n="nav_chat">چت هوش مصنوعی</h2>
       <div id="chatSetup" class="alert warn" style="display:none"></div>
@@ -260,6 +258,7 @@ font-family:Tahoma,sans-serif;direction:rtl;text-align:right;box-shadow:0 2px 10
       </div>
     </section>
 
+    <!-- IMAGE -->
     <section class="page" id="page-image">
       <h2 style="margin-top:0" data-i18n="nav_image">استودیو تصویر</h2>
       <div id="imgSetup" class="alert warn" style="display:none"></div>
@@ -274,6 +273,7 @@ font-family:Tahoma,sans-serif;direction:rtl;text-align:right;box-shadow:0 2px 10
       <div id="imgHistory" class="empty" data-i18n="no_history">هنوز تصویری تولید نشده است.</div>
     </section>
 
+    <!-- VIDEO -->
     <section class="page" id="page-video">
       <h2 style="margin-top:0" data-i18n="nav_video">استودیو ویدئو</h2>
       <div id="vidSetup" class="alert warn" style="display:none"></div>
@@ -286,9 +286,10 @@ font-family:Tahoma,sans-serif;direction:rtl;text-align:right;box-shadow:0 2px 10
       <div id="vidResult" style="margin-top:16px"></div>
     </section>
 
+    <!-- TICKETS -->
     <section class="page" id="page-tickets">
       <h2 style="margin-top:0" data-i18n="nav_tickets">تیکت پشتیبانی</h2>
-      <p class="alert warn" data-i18n="tickets_note">برای ایجاد تیکت باید با نقش کارکنان وارد شوید.</p>
+      <p class="alert warn" data-i18n="tickets_note">برای ایجاد تیکت باید با نقش کارکنان وارد شوید (مدیر / معاون / معلم). تیکت‌ها در حافظهٔ سمت‌کلاینت نیز ذخیره می‌شوند تا در نبود دیتابیس از دست نروند.</p>
       <div class="form-grid">
         <label>موضوع <input type="text" id="ticketSubject"></label>
         <label>دسته‌بندی
@@ -300,6 +301,7 @@ font-family:Tahoma,sans-serif;direction:rtl;text-align:right;box-shadow:0 2px 10
       <div id="ticketList" style="margin-top:16px"></div>
     </section>
 
+    <!-- CONTESTS -->
     <section class="page" id="page-contests">
       <h2 style="margin-top:0" data-i18n="nav_contests">مسابقات</h2>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
@@ -320,25 +322,32 @@ font-family:Tahoma,sans-serif;direction:rtl;text-align:right;box-shadow:0 2px 10
       </div>
     </section>
 
+    <!-- SUBS -->
     <section class="page" id="page-subs">
       <h2 style="margin-top:0" data-i18n="nav_subs">اشتراک‌ها</h2>
-      <p class="alert warn">قیمت‌ها به «کاوش» مشخص شده‌اند. پرداخت واقعی فقط با اتصال درگاه فعال می‌شود.</p>
+      <p class="alert warn">قیمت‌ها به «کاوش» مشخص شده‌اند. پرداخت واقعی فقط با اتصال درگاه فعال می‌شود و تا آن زمان دکمهٔ خرید فقط نمایشی است.</p>
       <div class="grid" id="planCards"></div>
     </section>
 
+    <!-- NOTIFS -->
     <section class="page" id="page-notifs">
       <h2 style="margin-top:0" data-i18n="nav_notifs">اعلان‌ها</h2>
       <div id="notifList" class="empty">اعلانی وجود ندارد.</div>
     </section>
 
+    <!-- PROFILE -->
     <section class="page" id="page-profile">
       <h2 style="margin-top:0" data-i18n="nav_profile">پروفایل و تنظیمات</h2>
       <div class="form-grid">
-        <p data-i18n="auth_note">ورود مدیر، ۸ معاون، ۱۰ معلم و تا ۳۰۰۰ دانش‌آموز — رمزها فقط از Environment/.env.</p>
+        <p data-i18n="auth_note">ورود مدیر، ۸ معاون، ۱۰ معلم و تا ۳۰۰۰ دانش‌آموز — رمزها فقط از Environment/.env. ورود گوگل نیازمند پیکربندی OAuth است و در این نسخهٔ stdlib فعال نیست — برای آن باید ارائه‌دهندهٔ احراز هویت خارجی وصل شود.</p>
         <div id="managerEnvHintProfile" class="alert warn">در حال بررسی وضعیت رمز مدیر…</div>
         <label>نقش
           <select id="loginRole">
-            <option value="manager">مدیر</option>
+            <option value="owner">مالک</option>
+            <option value="manager1">مدیر ۱</option>
+            <option value="manager2">مدیر ۲</option>
+            <option value="manager3">مدیر ۳</option>
+            <option value="manager4">مدیر ۴</option>
             <option value="deputy1">معاون ۱</option>
             <option value="deputy2">معاون ۲</option>
             <option value="deputy3">معاون ۳</option>
@@ -369,9 +378,12 @@ font-family:Tahoma,sans-serif;direction:rtl;text-align:right;box-shadow:0 2px 10
       </div>
     </section>
 
+    <!-- ADMIN -->
+    
+    
     <section class="page" id="page-voice">
       <h2 style="margin-top:0">دستیار صوتی فارسی</h2>
-      <p class="alert">موتور گفتار مرورگر (Web Speech API). بدون کلید در کلاینت.</p>
+      <p class="alert">موتور گفتار مرورگر (Web Speech API). بدون کلید در کلاینت. کیفیت فارسی به مرورگر بستگی دارد.</p>
       <div class="card">
         <p id="voicePageStatus">آماده</p>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -388,10 +400,10 @@ font-family:Tahoma,sans-serif;direction:rtl;text-align:right;box-shadow:0 2px 10
 
     <section class="page" id="page-support">
       <h2 style="margin-top:0">پشتیبانی کاوش</h2>
-      <p class="alert">از این بخش می‌توانید تیکت ثبت کنید یا وضعیت درخواست خرید را ببینید.</p>
+      <p class="alert">از این بخش می‌توانید تیکت ثبت کنید یا وضعیت درخواست خرید را ببینید. پرداخت خودکار فعال نیست.</p>
       <div class="grid">
         <div class="card"><h3>تیکت پشتیبانی</h3><p>از منوی تیکت موضوع را ثبت کنید.</p><button class="btn btn-primary" type="button" data-goto="tickets">رفتن به تیکت‌ها</button></div>
-        <div class="card"><h3>درخواست اشتراک</h3><p>از صفحه اشتراک‌ها طرح را انتخاب کنید.</p><button class="btn" type="button" data-goto="subs">رفتن به اشتراک‌ها</button></div>
+        <div class="card"><h3>درخواست اشتراک</h3><p>از صفحه اشتراک‌ها طرح را انتخاب و درخواست ثبت کنید.</p><button class="btn" type="button" data-goto="subs">رفتن به اشتراک‌ها</button></div>
         <div class="card"><h3>ورود / حساب</h3><p>برای پیگیری درخواست‌ها وارد شوید.</p><button class="btn" type="button" data-goto="profile">پروفایل</button></div>
       </div>
       <h3>درخواست‌های خرید من</h3>
@@ -400,7 +412,7 @@ font-family:Tahoma,sans-serif;direction:rtl;text-align:right;box-shadow:0 2px 10
 
     <section class="page" id="page-knowledge">
       <h2 style="margin-top:0">پایگاه دانش</h2>
-      <p class="alert warn">جست‌وجوی واژگانی روی اسناد ذخیره‌شده. افزودن سند فقط برای کارکنان.</p>
+      <p class="alert warn">جست‌وجوی واژگانی روی اسناد ذخیره‌شده. افزودن سند فقط برای کارکنان. این نسخه برای مقیاس‌پذیری طراحی شده؛ میلیون‌ها سند از ابتدا بارگذاری نمی‌شود.</p>
       <div class="form-grid">
         <label>جست‌وجو در دانش <input type="text" id="kbQuery" placeholder="عبارت…"></label>
         <button class="btn btn-primary" type="button" id="kbSearchBtn">جست‌وجو</button>
@@ -418,10 +430,41 @@ font-family:Tahoma,sans-serif;direction:rtl;text-align:right;box-shadow:0 2px 10
       </div>
     </section>
 
+    
+    <section class="page" id="page-news">
+      <h2 style="margin-top:0">اخبار کاوش</h2>
+      <div id="newsStaff" style="display:none" class="card">
+        <h3>ثبت خبر (کارکنان)</h3>
+        <div class="form-grid">
+          <label>عنوان <input type="text" id="newsTitle"></label>
+          <label>متن <textarea id="newsBody" rows="4"></textarea></label>
+          <button class="btn btn-primary" type="button" id="newsPostBtn">انتشار</button>
+          <div id="newsMsg"></div>
+        </div>
+      </div>
+      <div id="newsList" class="empty">در حال بارگذاری…</div>
+    </section>
+
+    <section class="page" id="page-channel">
+      <h2 style="margin-top:0">کاوش ویدیو</h2>
+      <p class="alert">کانال ویدئویی شبیه آپارات/یوتیوب — پخش از لینک مستقیم یا آپارات/یوتیوب. آپلود فایل حجیم روی سرور انجام نمی‌شود؛ لینک ویدئو ثبت می‌شود.</p>
+      <div id="videoStaff" style="display:none" class="card">
+        <h3>افزودن ویدئو (کارکنان)</h3>
+        <div class="form-grid">
+          <label>عنوان <input type="text" id="vidTitle"></label>
+          <label>لینک ویدئو (mp4 / آپارات / یوتیوب) <input type="url" id="vidUrl" placeholder="https://..."></label>
+          <label>توضیحات <textarea id="vidDesc" rows="3"></textarea></label>
+          <button class="btn btn-primary" type="button" id="vidPostBtn">ثبت در کانال</button>
+          <div id="vidChanMsg"></div>
+        </div>
+      </div>
+      <div id="channelList" class="empty">در حال بارگذاری…</div>
+    </section>
+
     <section class="page" id="page-admin">
       <h2 style="margin-top:0" data-i18n="nav_admin">پنل مدیریت</h2>
       <div id="adminLoginGate" class="form-grid" style="max-width:420px">
-        <p class="alert warn">ورود مدیر فقط با رمز <code>MANAGER_PASSWORD</code> روی سرور.</p>
+        <p class="alert warn">ورود مدیر فقط با رمز <code>MANAGER_PASSWORD</code> روی سرور. رمز در مرورگر ذخیره یا نمایش داده نمی‌شود.</p>
         <div id="managerEnvHint" class="alert warn">در حال بررسی وضعیت رمز مدیر…</div>
         <label>رمز مدیر <input type="password" id="adminPass" autocomplete="current-password"></label>
         <button class="btn btn-primary" id="adminLoginBtn" type="button">ورود به پنل مدیر</button>
@@ -434,8 +477,6 @@ font-family:Tahoma,sans-serif;direction:rtl;text-align:right;box-shadow:0 2px 10
 
 <script>
 (function(){
-"use strict";
-try {
 const $ = id => document.getElementById(id);
 const TOKEN_KEY = 'kavosh_token';
 const LANG_KEY = 'kavosh_lang';
@@ -451,6 +492,7 @@ let currentConv = null;
 let messages = [];
 let lang = localStorage.getItem(LANG_KEY) || 'fa';
 
+/* ---- i18n: 50 language codes; full strings for fa/en, keys for others ---- */
 const LANGS = [
   {code:'fa',name:'فارسی',dir:'rtl'},{code:'en',name:'English',dir:'ltr'},
   {code:'ar',name:'العربية',dir:'rtl'},{code:'tr',name:'Türkçe',dir:'ltr'},
@@ -525,6 +567,7 @@ function applyI18n(){
   });
 }
 
+/* language selector */
 const langSelect = $('langSelect');
 LANGS.forEach(l => {
   const o = document.createElement('option');
@@ -538,18 +581,16 @@ langSelect.addEventListener('change', () => {
   applyI18n();
 });
 
-/* single consolidated theme system */
-const THEMES = ['dark','light','aurora','sunset','royal','forest','ocean','rose','sand','mint','crimson','slate'];
-function applyTheme(name){
-  if (!THEMES.includes(name)) name = 'dark';
-  document.documentElement.setAttribute('data-theme', name);
-  localStorage.setItem(THEME_KEY, name);
-  const sel = $('themeSelect');
-  if (sel) sel.value = name;
+/* theme */
+function setTheme(th){
+  document.documentElement.setAttribute('data-theme', th === 'light' ? 'light' : 'dark');
+  localStorage.setItem(THEME_KEY, th);
 }
-(function initTheme(){
-  applyTheme(localStorage.getItem(THEME_KEY) || 'dark');
-})();
+setTheme(localStorage.getItem(THEME_KEY) || 'dark');
+$('themeBtn').addEventListener('click', () => {
+  const cur = document.documentElement.getAttribute('data-theme');
+  setTheme(cur === 'light' ? 'dark' : 'light');
+});
 
 /* nav */
 function showPage(id){
@@ -560,12 +601,21 @@ function showPage(id){
   const btn = document.querySelector('.nav button[data-page="'+id+'"]');
   if (btn) btn.classList.add('active');
   $('sidebar').classList.remove('open');
+  if (id === 'admin') loadAdminWithPurchases();
+  if (id === 'subs') loadPlans();
+  if (id === 'news') loadNews();
+  if (id === 'channel') loadChannel();
+  if (id === 'contests') loadContests();
+  if (id === 'tickets') renderTickets();
+  if (id === 'notifs') loadNotifs();
+  if (id === 'chat') { renderMessages(); refreshMemory(); }
 }
 document.querySelectorAll('.nav button[data-page]').forEach(b => {
   b.addEventListener('click', () => showPage(b.dataset.page));
 });
 $('menuBtn').addEventListener('click', () => $('sidebar').classList.toggle('open'));
 
+/* API helper */
 async function api(path, opts = {}){
   const headers = Object.assign({'Content-Type':'application/json'}, opts.headers || {});
   if (token) headers['Authorization'] = 'Bearer ' + token;
@@ -640,19 +690,16 @@ function renderFeatures(){
   ).join('');
 }
 
+/* auth */
 async function refreshMe(){
-  try {
-    if (!token) { user = null; updateAuthUI(); return; }
-    const {data} = await api('/api/me');
-    if (data && data.authenticated) {
-      user = data;
-    } else {
-      token = ''; localStorage.removeItem(TOKEN_KEY); user = null;
-    }
-    updateAuthUI();
-  } catch(e) {
-    user = null; updateAuthUI();
+  if (!token) { user = null; updateAuthUI(); return; }
+  const {data} = await api('/api/me');
+  if (data && data.authenticated) {
+    user = data;
+  } else {
+    token = ''; localStorage.removeItem(TOKEN_KEY); user = null;
   }
+  updateAuthUI();
 }
 
 function updateAuthUI(){
@@ -663,9 +710,9 @@ function updateAuthUI(){
     badge.style.display = '';
     badge.textContent = user.label || user.name || user.role;
     logout.style.display = '';
-    const staff = user.role === 'manager' || (user.role||'').startsWith('deputy') || (user.role||'').startsWith('teacher');
+    const staff = user.role === 'owner' || user.role === 'manager' || (user.role||'').startsWith('manager') || (user.role||'').startsWith('deputy') || (user.role||'').startsWith('teacher');
     adminNav.style.display = staff ? '' : 'none';
-    $('contestAdmin').style.display = (user.role === 'manager' || (user.role||'').startsWith('deputy')) ? '' : 'none';
+    $('contestAdmin').style.display = (user.role === 'owner' || (user.role||'').startsWith('manager') || (user.role||'').startsWith('deputy')) ? '' : 'none';
   } else {
     badge.style.display = 'none';
     logout.style.display = 'none';
@@ -708,6 +755,7 @@ $('logoutBtn').addEventListener('click', async () => {
   showPage('home');
 });
 
+/* chat local history */
 function loadLocalChats(){
   try { return JSON.parse(localStorage.getItem(LOCAL_CHATS) || '[]'); } catch(e){ return []; }
 }
@@ -869,6 +917,7 @@ async function createTextFile(filename, content){
     body: JSON.stringify({filename: filename || 'kavosh.txt', content: content || ''})
   });
   if (data.ok && data.downloadPath) {
+    // fetch blob with auth so download always works
     try {
       const headers = {};
       if (token) headers['Authorization'] = 'Bearer ' + token;
@@ -884,6 +933,7 @@ async function createTextFile(filename, content){
       setTimeout(() => URL.revokeObjectURL(url), 2000);
       return {ok:true, filename: data.filename};
     } catch(e) {
+      // fallback open path
       window.open(data.downloadPath, '_blank');
       return {ok:true, filename: data.filename};
     }
@@ -896,6 +946,7 @@ $('chatInput').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
 });
 
+/* image */
 $('imgGenBtn').addEventListener('click', async () => {
   const prompt = $('imgPrompt').value.trim();
   if (!prompt) return;
@@ -913,10 +964,11 @@ $('imgGenBtn').addEventListener('click', async () => {
   }
 });
 
+/* video */
 $('vidGenBtn').addEventListener('click', async () => {
   const prompt = $('vidPrompt').value.trim();
   if (!prompt) return;
-  $('vidResult').innerHTML = '<div class="alert loading">در حال ساخت ویدئو…</div>';
+  $('vidResult').innerHTML = '<div class="alert loading">در حال ساخت ویدئو (ممکن است تا ۲ دقیقه طول بکشد)…</div>';
   const {data} = await api('/api/video', {method:'POST', body: JSON.stringify({prompt})});
   if (data.ok && data.url) {
     const note = data.message ? `<div class="alert ${data.isStillFrame?'warn':'ok'}">${escapeHtml(data.message)}</div>` : '<div class="alert ok">موفق</div>';
@@ -935,6 +987,7 @@ $('vidGenBtn').addEventListener('click', async () => {
   }
 });
 
+/* tickets local */
 function getTickets(){ try{return JSON.parse(localStorage.getItem(LOCAL_TICKETS)||'[]');}catch(e){return[]} }
 function setTickets(t){ localStorage.setItem(LOCAL_TICKETS, JSON.stringify(t)); }
 
@@ -967,6 +1020,7 @@ function renderTickets(){
     '</tbody></table>';
 }
 
+/* contests */
 function getLocalContests(){ try{return JSON.parse(localStorage.getItem(LOCAL_CONTESTS)||'[]');}catch(e){return[]} }
 function setLocalContests(c){ localStorage.setItem(LOCAL_CONTESTS, JSON.stringify(c)); }
 
@@ -999,6 +1053,7 @@ $('cCreate').addEventListener('click', async () => {
     $('cTitle').value=''; $('cDesc').value=''; $('cRules').value='';
     loadContests();
   } else {
+    // local fallback
     const list = getLocalContests();
     list.unshift({id:'C-L'+Date.now(), title, description, rules, status:'upcoming'});
     setLocalContests(list);
@@ -1006,6 +1061,7 @@ $('cCreate').addEventListener('click', async () => {
   }
 });
 
+/* plans */
 async function loadPlans(){
   const defaults = [
     {id:'plus_1m', name:'پلاس — ۱ ماه', priceLabel:'۵۰٬۰۰۰ کاوش', features:['چت بیشتر','حافظه گفتگو','جست‌وجوی وب محدود']},
@@ -1087,14 +1143,14 @@ async function loadAdmin(){
         <p>endpoint: ${image.endpointConfigured?escapeHtml(image.endpointHost||'yes'):'—'}</p>
         <p>مدل: <code>${escapeHtml(image.model||'')}</code></p>
         <p>کلید: <span class="badge ${image.keyConfigured?'good':'bad'}">${image.keyConfigured?'پیکربندی شده':'خیر'}</span></p>
-        <button class="btn" type="button" data-test="image">آزمایش واقعی ساخت تصویر</button>
+        <button class="btn" type="button" data-test="image">بررسی تنظیمات</button>
       </div>
       <div class="card">
         <h3>ویدئو</h3>
         <p>endpoint: ${video.endpointConfigured?escapeHtml(video.endpointHost||'yes'):'—'}</p>
         <p>مدل: <code>${escapeHtml(video.model||'')}</code></p>
         <p>کلید: <span class="badge ${video.keyConfigured?'good':'bad'}">${video.keyConfigured?'پیکربندی شده':'خیر'}</span></p>
-        <button class="btn" type="button" data-test="video">آزمایش واقعی ساخت ویدئو</button>
+        <button class="btn" type="button" data-test="video">بررسی تنظیمات</button>
       </div>
       <div class="card">
         <h3>احراز هویت</h3>
@@ -1103,12 +1159,14 @@ async function loadAdmin(){
         <p>معلم‌ها: ${auth.teachersConfigured||0}/${auth.teacherCount||10}</p>
         <p>دانش‌آموزان پیکربندی‌شده: ${auth.studentsConfigured||0} / ${auth.studentCount||3000}</p>
         <p style="font-size:11px;color:var(--muted)">${escapeHtml(auth.studentPasswordNote||'رمز فقط از STUDENT_n_PASSWORD در env')}</p>
+        <p style="font-size:11px;color:var(--muted)">${escapeHtml(auth.googleOAuthNote||'')}</p>
+        <p style="font-size:11px;color:var(--muted)">${escapeHtml(auth.xaiGrokNote||'')}</p>
       </div>
     </div>
     <div id="adminTestMsg" style="margin-top:12px"></div>
     <h3>فعالیت اخیر</h3>
     <div>${(sum.activity||[]).map(a=>`<div class="card" style="margin-bottom:8px"><strong>${escapeHtml(a.actor||'')}</strong> — ${escapeHtml(a.action||'')} <span class="badge">${escapeHtml(a.detail||'')}</span></div>`).join('')||'<div class="empty">—</div>'}</div>
-    <p class="alert warn" style="margin-top:16px">تغییر مدل/کلید فقط از Environment سرویس میزبانی (مثل Render) ممکن است.</p>
+    <p class="alert warn" style="margin-top:16px">تغییر مدل/کلید فقط از Environment سرویس میزبانی (مثل Render) ممکن است. این برنامه نمی‌تواند متغیرهای Render را از داخل تغییر دهد؛ پس از تغییر env معمولاً Redeploy لازم است.</p>
   `;
   panel.querySelectorAll('[data-test]').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -1133,6 +1191,7 @@ async function loadAdmin(){
   });
 }
 
+/* starfield */
 const canvas = $('starfield'), ctx = canvas.getContext('2d');
 let w=0,h=0,stars=[],last=0;
 function resize(){
@@ -1163,6 +1222,8 @@ function draw(t){
 }
 window.addEventListener('resize', resize);
 resize(); requestAnimationFrame(draw);
+
+
 
 async function refreshMemory(){
   const box = $('memoryList');
@@ -1223,10 +1284,11 @@ $('searchOnlyBtn') && $('searchOnlyBtn').addEventListener('click', async () => {
   }
 });
 
+
 $('adminLoginBtn').addEventListener('click', async () => {
   const password = $('adminPass').value;
   $('adminLoginMsg').textContent = '…';
-  const {status, data} = await api('/api/auth/login', {method:'POST', body: JSON.stringify({role:'manager', password})});
+  const {status, data} = await api('/api/auth/login', {method:'POST', body: JSON.stringify({role: ($('adminLoginRole')&&$('adminLoginRole').value)||'owner', password})});
   if (data.ok && data.token) {
     token = data.token;
     localStorage.setItem(TOKEN_KEY, token);
@@ -1238,6 +1300,27 @@ $('adminLoginBtn').addEventListener('click', async () => {
   } else {
     $('adminLoginMsg').innerHTML = `<div class="alert err">${escapeHtml(data.error||'خطا')}</div>`;
   }
+});
+
+
+const THEMES = ['dark','light','aurora','sunset','royal','forest','ocean','rose','sand','mint','crimson','slate'];
+function applyTheme(name){
+  if (!THEMES.includes(name)) name = 'dark';
+  document.documentElement.setAttribute('data-theme', name === 'dark' ? 'dark' : name);
+  if (name === 'dark') document.documentElement.removeAttribute('data-theme');
+  if (name === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  localStorage.setItem(THEME_KEY, name);
+  const sel = $('themeSelect');
+  if (sel) sel.value = name;
+}
+(function initTheme(){
+  const saved = localStorage.getItem(THEME_KEY) || 'dark';
+  applyTheme(saved);
+})();
+$('themeSelect') && $('themeSelect').addEventListener('change', () => applyTheme($('themeSelect').value));
+$('themeBtn') && $('themeBtn').addEventListener('click', () => {
+  const cur = localStorage.getItem(THEME_KEY) || 'dark';
+  applyTheme(cur === 'light' ? 'dark' : 'light');
 });
 
 document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => showPage(b.getAttribute('data-goto'))));
@@ -1253,6 +1336,7 @@ async function loadPurchases(){
     '</tbody></table>';
 }
 
+// plan purchase delegation
 document.addEventListener('click', async (ev) => {
   const btn = ev.target.closest('[data-plan-id]');
   if (!btn) return;
@@ -1310,13 +1394,8 @@ showPage = function(id){
     const box = $('kbIngestBox');
     if (box) box.style.display = (user && (user.role==='manager' || (user.role||'').startsWith('deputy') || (user.role||'').startsWith('teacher'))) ? '' : 'none';
   }
-  if (id === 'chat') { renderMessages(); refreshMemory(); }
-  if (id === 'subs') loadPlans();
-  if (id === 'contests') loadContests();
-  if (id === 'tickets') renderTickets();
-  if (id === 'notifs') loadNotifs();
-  if (id === 'admin') loadAdminWithPurchases();
 };
+
 
 async function loadAdminPurchases(into){
   if (!into) return;
@@ -1401,15 +1480,56 @@ $('voiceSendChat') && $('voiceSendChat').addEventListener('click', () => {
   const t=(($('voiceTranscript')&&$('voiceTranscript').value)||'').trim();
   if(!t) return; showPage('chat'); $('chatInput').value=t; sendChat();
 });
-
-/* single theme handlers */
-$('themeSelect') && $('themeSelect').addEventListener('change', () => applyTheme($('themeSelect').value));
-$('themeBtn') && $('themeBtn').addEventListener('click', () => {
-  const cur = localStorage.getItem(THEME_KEY) || 'dark';
-  applyTheme(cur === 'light' ? 'dark' : 'light');
-});
-
 if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js').catch(()=>{}); }
+
+
+function isStaffUser(){
+  if (!user) return false;
+  const r = user.role || '';
+  return r === 'owner' || r === 'manager' || r.startsWith('manager') || r.startsWith('deputy') || r.startsWith('teacher');
+}
+async function loadNews(){
+  const box = $('newsList');
+  if (!box) return;
+  const staff = $('newsStaff');
+  if (staff) staff.style.display = isStaffUser() ? '' : 'none';
+  const {data} = await api('/api/news');
+  if (!data.ok || !(data.news||[]).length) { box.innerHTML = '<div class="empty">خبری نیست</div>'; return; }
+  box.innerHTML = data.news.map(n =>
+    `<div class="card"><h3>${escapeHtml(n.title)}</h3><p style="white-space:pre-wrap">${escapeHtml(n.body)}</p>
+     <p class="badge">${escapeHtml(n.author||'')} · ${n.created_at? new Date(n.created_at*1000).toLocaleString('fa-IR'):''}</p></div>`
+  ).join('');
+}
+async function loadChannel(){
+  const box = $('channelList');
+  if (!box) return;
+  const staff = $('videoStaff');
+  if (staff) staff.style.display = isStaffUser() ? '' : 'none';
+  const {data} = await api('/api/videos');
+  if (!data.ok || !(data.videos||[]).length) { box.innerHTML = '<div class="empty">ویدئویی نیست</div>'; return; }
+  box.innerHTML = data.videos.map(v => {
+    let player = '';
+    const u = v.url || '';
+    if (/\.(mp4|webm)(\?|$)/i.test(u)) {
+      player = `<video src="${escapeHtml(u)}" controls playsinline style="width:100%;max-height:360px;border-radius:12px;background:#000"></video>`;
+    } else {
+      player = `<a class="btn btn-primary" href="${escapeHtml(u)}" target="_blank" rel="noopener">تماشا در منبع</a>`;
+    }
+    return `<div class="card"><h3>${escapeHtml(v.title)}</h3>${player}
+      <p style="font-size:12px;color:var(--muted)">${escapeHtml(v.description||'')}</p>
+      <p class="badge">${escapeHtml(v.author||'')}</p></div>`;
+  }).join('');
+}
+$('newsPostBtn') && $('newsPostBtn').addEventListener('click', async () => {
+  const {data} = await api('/api/news', {method:'POST', body: JSON.stringify({title:$('newsTitle').value, body:$('newsBody').value})});
+  $('newsMsg').innerHTML = data.ok ? '<div class="alert ok">منتشر شد</div>' : `<div class="alert err">${escapeHtml(data.error||'خطا')}</div>`;
+  if (data.ok) { $('newsTitle').value=''; $('newsBody').value=''; loadNews(); }
+});
+$('vidPostBtn') && $('vidPostBtn').addEventListener('click', async () => {
+  const {data} = await api('/api/videos', {method:'POST', body: JSON.stringify({title:$('vidTitle').value, url:$('vidUrl').value, description:$('vidDesc').value})});
+  $('vidChanMsg').innerHTML = data.ok ? '<div class="alert ok">ثبت شد</div>' : `<div class="alert err">${escapeHtml(data.error||'خطا')}</div>`;
+  if (data.ok) loadChannel();
+});
 
 /* init */
 applyI18n();
@@ -1418,14 +1538,6 @@ renderConvList();
 refreshHealth();
 refreshMe();
 setInterval(refreshHealth, 60000);
-
-} catch (err) {
-  console.error('Kavosh init failed:', err);
-  const bar = document.createElement('div');
-  bar.id = 'fatalError';
-  bar.textContent = 'خطا در بارگذاری کاوش: ' + (err && err.message ? err.message : String(err)) + ' — کنسول مرورگر را برای جزئیات ببینید.';
-  document.body.appendChild(bar);
-}
 })();
 </script>
 </body>

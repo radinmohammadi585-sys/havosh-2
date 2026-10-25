@@ -130,7 +130,7 @@ def call_json_api(url: str, key: str, payload: dict, timeout=60, extra_headers=N
     request = Request(url, data=json_bytes(payload), headers=headers, method="POST")
     try:
         with urlopen(request, timeout=timeout) as response:
-            raw = response.read(12_000_000)
+            raw = response.read(2_000_000)
             return response.status, json.loads(raw.decode("utf-8"))
     except HTTPError as exc:
         raw = exc.read(1_000_000)
@@ -747,6 +747,24 @@ def init_db():
             );
             """)
             ensure_knowledge_tables(conn)
+            conn.executescript('''
+            CREATE TABLE IF NOT EXISTS news_posts (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                body TEXT NOT NULL,
+                author TEXT,
+                created_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS channel_videos (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT,
+                url TEXT NOT NULL,
+                author TEXT,
+                views INTEGER DEFAULT 0,
+                created_at INTEGER NOT NULL
+            );
+            ''')
             # Always sync canonical plan catalog (idempotent upsert)
             plan_rows = [
                 ("plus_1m", "پلاس — ۱ ماه", "۵۰٬۰۰۰ کاوش", 30,
@@ -838,9 +856,24 @@ def drop_session(token: str):
         finally:
             conn.close()
 
+
+def configured_managers() -> int:
+    n = sum(1 for i in range(1, 5) if os.getenv(f"MANAGER_{i}_PASSWORD", "").strip())
+    if os.getenv("MANAGER_PASSWORD", "").strip():  # legacy counts as manager1
+        n = max(n, 1)
+    return n
+
+def configured_owner() -> bool:
+    return bool(os.getenv("OWNER_PASSWORD", "").strip())
+
 def role_label(role: str) -> str:
-    if role == "manager":
-        return "مدیر"
+    if role == "owner":
+        return "مالک"
+    m = re.fullmatch(r"manager([1-4])", role or "")
+    if m:
+        return f"مدیر {m.group(1)}"
+    if role == "manager":  # legacy alias → مدیر ۱
+        return "مدیر ۱"
     m = re.fullmatch(r"deputy([1-8])", role or "")
     if m:
         return f"معاون {m.group(1)}"
@@ -855,10 +888,16 @@ def role_label(role: str) -> str:
     return role or "کاربر"
 
 def is_staff(role: str) -> bool:
-    return bool(role == "manager" or re.fullmatch(r"deputy[1-8]", role or "") or re.fullmatch(r"teacher(?:[1-9]|10)", role or ""))
+    return bool(
+        role == "owner"
+        or role == "manager"
+        or re.fullmatch(r"manager[1-4]", role or "")
+        or re.fullmatch(r"deputy[1-8]", role or "")
+        or re.fullmatch(r"teacher(?:[1-9]|10)", role or "")
+    )
 
 def is_admin(role: str) -> bool:
-    return bool(role == "manager" or re.fullmatch(r"deputy[1-8]", role or ""))
+    return bool(role == "owner" or role == "manager" or re.fullmatch(r"manager[1-4]", role or "") or re.fullmatch(r"deputy[1-8]", role or ""))
 
 def login_rate_allowed(ip: str) -> bool:
     now = time.time()
@@ -941,7 +980,10 @@ def public_provider_status() -> dict:
             "keyConfigured": bool(vid_key),
         },
         "auth": {
-            "managerConfigured": bool(os.getenv("MANAGER_PASSWORD")),
+            "ownerConfigured": configured_owner(),
+            "managerConfigured": configured_managers() > 0,
+            "managersConfigured": configured_managers(),
+            "managerCount": 4,
             "deputiesConfigured": configured_deputies(),
             "deputyCount": 8,
             "teachersConfigured": configured_teachers(),
@@ -1048,7 +1090,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, {
                 "ok": True, "name": SITE_NAME, "version": "2.1.0", "provider": "openrouter", "runtime": "python",
                 "keyConfigured": bool(API_KEY), "imageConfigured": True, "imageProvider": ("api" if all(media_config("تصویر")) else "pollinations-or-local"),
-                "videoConfigured": True, "videoProvider": ("api" if all(media_config("ویدئو")) else "public-or-preview"), "managerConfigured": bool(os.getenv("MANAGER_PASSWORD")),
+                "videoConfigured": True, "videoProvider": ("api" if all(media_config("ویدئو")) else "public-or-preview"), "ownerConfigured": configured_owner(),
+            "managerConfigured": configured_managers() > 0,
+            "managersConfigured": configured_managers(),
+            "managerCount": 4,
                 "deputiesConfigured": configured_deputies(), "deputyCount": 8,
                 "teachersConfigured": configured_teachers(), "teacherCount": 10,
                 "studentsConfigured": configured_students(), "studentCount": STUDENT_MAX
@@ -1189,6 +1234,31 @@ class Handler(BaseHTTPRequestHandler):
                     conn.close()
             return self.send_json(200, {"ok": True, "purchases": items})
 
+
+        if path == "/api/news":
+            with lock:
+                conn = db()
+                try:
+                    rows = conn.execute(
+                        "SELECT id, title, body, author, created_at FROM news_posts ORDER BY created_at DESC LIMIT 50"
+                    ).fetchall()
+                    items = [dict(r) for r in rows]
+                finally:
+                    conn.close()
+            return self.send_json(200, {"ok": True, "news": items})
+
+        if path == "/api/videos":
+            with lock:
+                conn = db()
+                try:
+                    rows = conn.execute(
+                        "SELECT id, title, description, url, author, views, created_at FROM channel_videos ORDER BY created_at DESC LIMIT 100"
+                    ).fetchall()
+                    items = [dict(r) for r in rows]
+                finally:
+                    conn.close()
+            return self.send_json(200, {"ok": True, "videos": items})
+
         if path in ("/api/panel/summary", "/api/panel/summary/"):
             s = self.session()
             if not s: return self.send_json(401, {"ok": False, "error": "ابتدا وارد پنل شو."})
@@ -1271,8 +1341,16 @@ class Handler(BaseHTTPRequestHandler):
                 body = self.read_json(5000)
                 role = str(body.get("role", "")).strip()
                 password = str(body.get("password", ""))
-                if role == "manager":
-                    expected = os.getenv("MANAGER_PASSWORD", "")
+                if role == "owner":
+                    expected = os.getenv("OWNER_PASSWORD", "")
+                elif re.fullmatch(r"manager[1-4]", role):
+                    expected = os.getenv(f"MANAGER_{role[-1]}_PASSWORD", "")
+                    if not expected and role == "manager1":
+                        expected = os.getenv("MANAGER_PASSWORD", "")  # legacy
+                elif role == "manager":
+                    # legacy single manager → manager1
+                    role = "manager1"
+                    expected = os.getenv("MANAGER_1_PASSWORD", "") or os.getenv("MANAGER_PASSWORD", "")
                 elif re.fullmatch(r"deputy[1-8]", role):
                     expected = os.getenv(f"DEPUTY_{role[6:]}_PASSWORD", "")
                     if not expected and role == "deputy1":
@@ -1293,7 +1371,9 @@ class Handler(BaseHTTPRequestHandler):
                     expected = ""
                 if not expected:
                     hint = {
-                        "manager": "متغیر MANAGER_PASSWORD را در Environment سرور (یا فایل .env محلی) تنظیم کن.",
+                        "owner": "متغیر OWNER_PASSWORD را در Environment تنظیم کن.",
+                        "manager1": "متغیر MANAGER_1_PASSWORD یا MANAGER_PASSWORD را تنظیم کن.",
+                        "manager": "متغیر MANAGER_1_PASSWORD یا MANAGER_PASSWORD را تنظیم کن.",
                         "deputy1": "متغیر DEPUTY_1_PASSWORD یا DEPUTY_PASSWORD را تنظیم کن.",
                     }.get(role, f"متغیر رمز مربوط به نقش «{role}» را در Environment تنظیم کن.")
                     if role.startswith("deputy") and role != "deputy1":
@@ -1489,7 +1569,6 @@ class Handler(BaseHTTPRequestHandler):
             if not validate_csrf(csrf):
                 return self.send_json(403, {"ok": False, "error": "توکن CSRF نامعتبر است. صفحه را تازه کنید."})
             kind = str(body.get("kind") or "chat").strip()
-
             if kind == "chat":
                 if not API_KEY:
                     return self.send_json(200, {"ok": False, "error": "OPENROUTER_API_KEY تنظیم نشده است."})
@@ -1506,87 +1585,14 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json(200, {"ok": False, "error": str(err or f"HTTP {status}")[:300]})
                 except Exception as exc:
                     return self.send_json(200, {"ok": False, "error": str(exc)[:300]})
-
             if kind == "image":
-                ep, k, m = media_config("تصویر")
-                if not (ep and k and m):
-                    return self.send_json(200, {"ok": False, "error": "IMAGE_API_URL / IMAGE_API_KEY / IMAGE_MODEL کامل نیست."})
-                try:
-                    # Real API call with a tiny prompt (test costs almost nothing)
-                    status, data = call_json_api(
-                        ep, k,
-                        {"model": m, "prompt": "a small red dot on white"},
-                        timeout=60,
-                    )
-                    if 200 <= status < 300:
-                        has_output = bool(
-                            isinstance(data, dict) and (
-                                data.get("data") or data.get("url") or data.get("output")
-                                or data.get("b64_json") or data.get("id") or data.get("task_id")
-                            )
-                        )
-                        return self.send_json(200, {
-                            "ok": True,
-                            "message": "✅ ارتباط واقعی با سرویس تصویر برقرار شد (HTTP %d).%s" % (
-                                status,
-                                " خروجی تصویری دریافت شد." if has_output else " پاسخ معتبر بود اما فیلد تصویر پیدا نشد؛ قالب پاسخ ارائه‌دهنده را بررسی کن."
-                            ),
-                            "responseKeys": list(data.keys())[:12] if isinstance(data, dict) else [],
-                            "testedPrompt": "a small red dot on white",
-                        })
-                    err = None
-                    if isinstance(data, dict):
-                        e = data.get("error")
-                        if isinstance(e, dict):
-                            err = e.get("message")
-                        else:
-                            err = e or data.get("message")
-                    return self.send_json(200, {
-                        "ok": False,
-                        "error": "❌ HTTP %d: %s" % (status, str(err or data)[:300]),
-                    })
-                except Exception as exc:
-                    return self.send_json(200, {"ok": False, "error": "❌ اتصال واقعی برقرار نشد: " + str(exc)[:300]})
-
+                if not all(media_config("تصویر")):
+                    return self.send_json(200, {"ok": False, "error": "IMAGE_API_URL / KEY / MODEL کامل نیست."})
+                return self.send_json(200, {"ok": True, "message": "متغیرهای تصویر روی سرور تنظیم شده‌اند (بدون ارسال درخواست واقعی به ارائه‌دهنده در این تست سبک)."})
             if kind == "video":
-                ep, k, m = media_config("ویدئو")
-                if not (ep and k and m):
-                    return self.send_json(200, {"ok": False, "error": "VIDEO_API_URL / VIDEO_API_KEY / VIDEO_MODEL کامل نیست."})
-                try:
-                    status, data = call_json_api(
-                        ep, k,
-                        {"model": m, "prompt": "test"},
-                        timeout=90,
-                    )
-                    if 200 <= status < 300:
-                        has_task = bool(
-                            isinstance(data, dict) and (
-                                data.get("id") or data.get("task_id") or data.get("job_id")
-                                or data.get("data") or data.get("url") or data.get("output")
-                            )
-                        )
-                        return self.send_json(200, {
-                            "ok": True,
-                            "message": "✅ ارتباط واقعی با سرویس ویدئو برقرار شد (HTTP %d).%s" % (
-                                status,
-                                " درخواست پذیرفته شد." if has_task else " پاسخ معتبر بود."
-                            ),
-                            "responseKeys": list(data.keys())[:12] if isinstance(data, dict) else [],
-                        })
-                    err = None
-                    if isinstance(data, dict):
-                        e = data.get("error")
-                        if isinstance(e, dict):
-                            err = e.get("message")
-                        else:
-                            err = e or data.get("message")
-                    return self.send_json(200, {
-                        "ok": False,
-                        "error": "❌ HTTP %d: %s" % (status, str(err or data)[:300]),
-                    })
-                except Exception as exc:
-                    return self.send_json(200, {"ok": False, "error": "❌ اتصال واقعی برقرار نشد: " + str(exc)[:300]})
-
+                if not all(media_config("ویدئو")):
+                    return self.send_json(200, {"ok": False, "error": "VIDEO_API_URL / KEY / MODEL کامل نیست."})
+                return self.send_json(200, {"ok": True, "message": "متغیرهای ویدئو روی سرور تنظیم شده‌اند (بدون ارسال درخواست واقعی به ارائه‌دهنده در این تست سبک)."})
             return self.send_json(400, {"ok": False, "error": "kind نامعتبر است."})
 
         
@@ -1772,6 +1778,63 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, result)
             except ValueError as exc:
                 return self.send_json(400, {"ok": False, "error": str(exc)})
+
+
+        if path == "/api/news":
+            s = self.session()
+            if not s or not is_staff(str(s.get("role") or "")):
+                return self.send_json(401, {"ok": False, "error": "فقط کارکنان می‌توانند خبر ثبت کنند."})
+            try:
+                body = self.read_json(50_000)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+            title = str(body.get("title") or "").strip()[:200]
+            text = str(body.get("body") or body.get("content") or "").strip()[:8000]
+            if not title or not text:
+                return self.send_json(400, {"ok": False, "error": "عنوان و متن خبر لازم است."})
+            nid = "N-" + secrets.token_hex(4).upper()
+            with lock:
+                conn = db()
+                try:
+                    conn.execute(
+                        "INSERT INTO news_posts (id, title, body, author, created_at) VALUES (?,?,?,?,?)",
+                        (nid, title, text, str(s.get("role")), int(time.time())),
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
+            log_activity(str(s["role"]), "news_create", nid)
+            return self.send_json(200, {"ok": True, "id": nid})
+
+        if path == "/api/videos":
+            s = self.session()
+            if not s or not is_staff(str(s.get("role") or "")):
+                return self.send_json(401, {"ok": False, "error": "فقط کارکنان می‌توانند ویدئو ثبت کنند."})
+            try:
+                body = self.read_json(20_000)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+            title = str(body.get("title") or "").strip()[:200]
+            url = str(body.get("url") or "").strip()[:500]
+            desc = str(body.get("description") or "").strip()[:2000]
+            if not title or not url:
+                return self.send_json(400, {"ok": False, "error": "عنوان و لینک ویدئو لازم است."})
+            if not (url.startswith("http://") or url.startswith("https://")):
+                return self.send_json(400, {"ok": False, "error": "لینک ویدئو باید http/https باشد."})
+            vid = "V-" + secrets.token_hex(4).upper()
+            with lock:
+                conn = db()
+                try:
+                    conn.execute(
+                        "INSERT INTO channel_videos (id, title, description, url, author, views, created_at) VALUES (?,?,?,?,?,0,?)",
+                        (vid, title, desc, url, str(s.get("role")), int(time.time())),
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
+            log_activity(str(s["role"]), "video_create", vid)
+            return self.send_json(200, {"ok": True, "id": vid})
+
 
         if path == "/api/chat":
             if not self.rate_allowed(): return self.send_json(429, {"ok": False, "error": "درخواست‌ها خیلی زیاد شده‌اند؛ یک دقیقه بعد دوباره تلاش کن."})
