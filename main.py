@@ -10,6 +10,7 @@ import sqlite3
 from knowledge.store import (
     ensure_knowledge_tables, ingest_document, search_chunks,
     list_documents, create_purchase, list_purchases, update_purchase_status,
+    seed_builtin_knowledge, answer_from_knowledge,
 )
 
 
@@ -747,6 +748,9 @@ def init_db():
             );
             """)
             ensure_knowledge_tables(conn)
+            seeded = seed_builtin_knowledge(conn)
+            if seeded:
+                print(f"Kavosh knowledge seeded: {seeded} documents")
             conn.executescript('''
             CREATE TABLE IF NOT EXISTS news_posts (
                 id TEXT PRIMARY KEY,
@@ -1852,9 +1856,8 @@ class Handler(BaseHTTPRequestHandler):
                     except RuntimeError as exc:
                         search_error = str(exc)[:300]
                 if not API_KEY:
-                    # Still useful: pure web search without LLM
                     if want_search and search_results:
-                        lines = ["نتایج جست‌وجوی وب (بدون مدل AI — کلید OpenRouter تنظیم نشده):", ""]
+                        lines = ["نتایج جست‌وجوی وب (بدون مدل AI):", ""]
                         for i, r in enumerate(search_results, 1):
                             lines.append(f"{i}. {r.get('title') or 'بدون عنوان'}")
                             if r.get("snippet"):
@@ -1867,13 +1870,25 @@ class Handler(BaseHTTPRequestHandler):
                             "answer": "\n".join(lines).strip(),
                             "provider": "web-search",
                             "searchResults": search_results,
-                            "note": "برای پاسخ هوشمند، OPENROUTER_API_KEY را تنظیم کنید.",
+                        })
+                    with lock:
+                        conn = db()
+                        try:
+                            kb = answer_from_knowledge(conn, message, limit=6)
+                        finally:
+                            conn.close()
+                    if kb.get("ok") and kb.get("answer"):
+                        return self.send_json(200, {
+                            "ok": True,
+                            "answer": kb["answer"],
+                            "provider": "kavosh-knowledge",
+                            "note": "کلید AI نیست یا در دسترس نیست؛ پاسخ از موتور دانش کاوش.",
                         })
                     if want_search and search_error:
-                        return self.send_json(502, {"ok": False, "error": search_error, "setupRequired": False})
+                        return self.send_json(502, {"ok": False, "error": search_error})
                     return self.send_json(503, {
                         "ok": False,
-                        "error": "کلید API تنظیم نشده است. OPENROUTER_API_KEY را در تنظیمات خصوصی سرور وارد کن. برای جست‌وجوی وب بدون AI، گزینه «جست‌وجوی وب» را فعال کنید.",
+                        "error": "کلید AI تنظیم نیست و در دانش کاوش مطلب مرتبطی نبود.",
                         "setupRequired": True,
                     })
                 hist = body.get("history", [])
@@ -1939,9 +1954,32 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 if status < 200 or status >= 300:
                     err = (data.get("error") or {}).get("message") if isinstance(data.get("error"), dict) else data.get("error")
+                    with lock:
+                        conn = db()
+                        try:
+                            kb = answer_from_knowledge(conn, message, limit=6)
+                        finally:
+                            conn.close()
+                    if kb.get("ok") and kb.get("answer"):
+                        return self.send_json(200, {
+                            "ok": True,
+                            "answer": kb["answer"],
+                            "provider": "kavosh-knowledge",
+                            "note": f"سرویس AI خطا/محدودیت ({status})؛ موتور دانش کاوش فعال شد.",
+                            "upstreamError": str(err or status)[:300],
+                        })
                     return self.send_json(500, {"ok": False, "error": str(err or f"خطای سرویس هوش مصنوعی ({status})")[:500]})
                 answer = ((data.get("choices") or [{}])[0].get("message") or {}).get("content")
-                if not isinstance(answer, str) or not answer.strip(): return self.send_json(500, {"ok": False, "error": "پاسخ خالی از سرویس دریافت شد."})
+                if not isinstance(answer, str) or not answer.strip():
+                    with lock:
+                        conn = db()
+                        try:
+                            kb = answer_from_knowledge(conn, message, limit=6)
+                        finally:
+                            conn.close()
+                    if kb.get("ok") and kb.get("answer"):
+                        return self.send_json(200, {"ok": True, "answer": kb["answer"], "provider": "kavosh-knowledge", "note": "پاسخ مدل خالی بود؛ دانش کاوش فعال شد."})
+                    return self.send_json(500, {"ok": False, "error": "پاسخ خالی از سرویس دریافت شد."})
                 out = {"ok": True, "answer": answer.strip(), "provider": "openrouter"}
                 if search_results:
                     out["searchResults"] = search_results

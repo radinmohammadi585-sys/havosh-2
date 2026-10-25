@@ -172,3 +172,67 @@ def update_purchase_status(conn, purchase_id: str, status: str, note: str = "") 
         (status, (note or "")[:500], int(time.time()), purchase_id),
     )
     return {"ok": True, "id": purchase_id, "status": status}
+
+
+
+def seed_builtin_knowledge(conn) -> int:
+    """Load built-in corpus once when KB is empty. Returns number of new docs."""
+    row = conn.execute("SELECT COUNT(*) AS c FROM kb_documents").fetchone()
+    if row and int(row["c"] or 0) > 0:
+        return 0
+    try:
+        from knowledge.seed_data import SEED_DOCUMENTS
+    except Exception:
+        return 0
+    n = 0
+    for doc in SEED_DOCUMENTS:
+        try:
+            r = ingest_document(
+                conn,
+                title=str(doc.get("title") or "سند"),
+                content=str(doc.get("content") or ""),
+                source=str(doc.get("source") or "کاوش/داخلی"),
+                lang=str(doc.get("lang") or "fa"),
+            )
+            if r.get("ok") and not r.get("duplicate"):
+                n += 1
+        except Exception:
+            continue
+    return n
+
+
+def answer_from_knowledge(conn, query: str, limit: int = 6) -> dict:
+    """Build a user-facing answer from lexical KB hits (no external LLM)."""
+    hits = search_chunks(conn, query, limit=limit)
+    if not hits:
+        # broad fallback: try individual tokens
+        import re as _re
+        tokens = [t for t in _re.split(r"\s+", (query or "").strip()) if len(t) > 2][:5]
+        seen = set()
+        for t in tokens:
+            for h in search_chunks(conn, t, limit=3):
+                key = (h.get("doc_id"), h.get("content", "")[:80])
+                if key not in seen:
+                    seen.add(key)
+                    hits.append(h)
+            if len(hits) >= limit:
+                break
+    if not hits:
+        return {
+            "ok": False,
+            "answer": None,
+            "hits": [],
+        }
+    lines = [
+        "📚 پاسخ از موتور دانش کاوش (حالت جایگزین — بدون مدل ابری):",
+        "",
+    ]
+    for i, h in enumerate(hits[:limit], 1):
+        title = h.get("title") or "منبع"
+        src = h.get("source") or ""
+        body = (h.get("content") or "").strip()
+        lines.append(f"{i}) {title}" + (f" — {src}" if src else ""))
+        lines.append(body[:500])
+        lines.append("")
+    lines.append("اگر این پاسخ کامل نبود، سؤال را دقیق‌تر بپرسید یا وقتی سرویس AI در دسترس بود دوباره تلاش کنید.")
+    return {"ok": True, "answer": "\n".join(lines).strip(), "hits": hits[:limit]}
