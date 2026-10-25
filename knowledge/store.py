@@ -6,10 +6,6 @@ import re
 import time
 from typing import Any
 
-# Capacity targets (configured limits; actual scale depends on server/database resources)
-MAX_KB_DOCUMENTS = 10_000_000
-MAX_DOCUMENT_CHARS = 1_000_000_000
-
 # lexical search helpers — no external vector DB required for v1
 
 def _norm(text: str) -> str:
@@ -76,15 +72,12 @@ def ingest_document(conn, title: str, content: str, source: str = "", lang: str 
     content = (content or "").strip()
     if len(content) < 10:
         raise ValueError("متن سند خیلی کوتاه است.")
-    if len(content) > MAX_DOCUMENT_CHARS:
+    if len(content) > 500_000:
         raise ValueError("حجم سند بیش از حد مجاز است.")
     h = content_hash(content)
     existing = conn.execute("SELECT id, title FROM kb_documents WHERE content_hash=?", (h,)).fetchone()
     if existing:
         return {"ok": True, "duplicate": True, "id": existing["id"], "title": existing["title"]}
-    count_row = conn.execute("SELECT COUNT(*) AS c FROM kb_documents").fetchone()
-    if int(count_row["c"] if count_row else 0) >= MAX_KB_DOCUMENTS:
-        raise ValueError("ظرفیت پایگاه دانش به ۱۰ میلیون سند رسیده است.")
     doc_id = h[:16]
     now = int(time.time())
     conn.execute(
@@ -208,38 +201,82 @@ def seed_builtin_knowledge(conn) -> int:
     return n
 
 
+def _is_smalltalk(query: str) -> str | None:
+    """If message is greeting/thanks/bye, return a fixed polite reply."""
+    q = (query or "").strip().lower()
+    q = q.replace("ي", "ی").replace("ك", "ک")
+    # normalize extra spaces/punct
+    import re as _re
+    core = _re.sub(r"[!?.،,]+", " ", q)
+    core = _re.sub(r"\s+", " ", core).strip()
+    greetings = {
+        "سلام", "سلام علیکم", "درود", "هی", "hello", "hi", "hey", "salam",
+        "صبح بخیر", "ظهر بخیر", "عصر بخیر", "شب بخیر", "روز بخیر",
+    }
+    thanks = {"ممنون", "مرسی", "تشکر", "خیلی ممنون", "thanks", "thank you"}
+    byes = {"خداحافظ", "فعلا", "فعلاً", "بدرود", "bye", "goodbye"}
+    how = {"حالت چطوره", "چطوری", "خوبی", "how are you"}
+    if core in greetings or core.rstrip("ا") in greetings:
+        return "سلام! من کاوش هستم 👋 بپرسید از درس، علوم، ریاضی، نجوم یا هر موضوع درسی — سعی می‌کنم دقیق جواب بدهم."
+    if core in thanks:
+        return "خواهش می‌کنم. اگر سؤال دیگری دارید بپرسید."
+    if core in byes:
+        return "خداحافظ! موفق باشید."
+    if core in how:
+        return "ممنون، آماده‌ام کمکتان کنم. چه سؤالی دارید؟"
+    # very short non-question chatter
+    if len(core) <= 3 and core in {"خوب", "عالی", "باشه", "اوکی", "ok"}:
+        return "باشه. هر وقت سؤال داشتید بپرسید."
+    return None
+
+
 def answer_from_knowledge(conn, query: str, limit: int = 6) -> dict:
-    """Build a user-facing answer from lexical KB hits (no external LLM)."""
-    hits = search_chunks(conn, query, limit=limit)
-    if not hits:
-        # broad fallback: try individual tokens
-        import re as _re
-        tokens = [t for t in _re.split(r"\s+", (query or "").strip()) if len(t) > 2][:5]
-        seen = set()
-        for t in tokens:
-            for h in search_chunks(conn, t, limit=3):
-                key = (h.get("doc_id"), h.get("content", "")[:80])
-                if key not in seen:
-                    seen.add(key)
-                    hits.append(h)
-            if len(hits) >= limit:
-                break
-    if not hits:
+    """Answer only when knowledge is relevant; avoid random dumps for hello/etc."""
+    q = (query or "").strip()
+    if not q:
+        return {"ok": False, "answer": None, "hits": []}
+
+    small = _is_smalltalk(q)
+    if small:
+        return {"ok": True, "answer": small, "hits": [], "provider": "smalltalk"}
+
+    hits = search_chunks(conn, q, limit=max(limit, 8))
+    # Keep only reasonably relevant hits (score from search_chunks)
+    # search scores: term matches; require minimum score so "سلام" doesn't match junk
+    min_score = 3
+    # longer queries can use slightly lower bar if multiple terms match
+    tokens = [t for t in __import__("re").split(r"\s+", q) if len(t) > 1]
+    if len(tokens) >= 3:
+        min_score = 2
+
+    filtered = [h for h in (hits or []) if int(h.get("score") or 0) >= min_score]
+
+    # Do NOT broaden to single short tokens — that caused irrelevant answers
+    if not filtered:
         return {
-            "ok": False,
-            "answer": None,
+            "ok": True,
+            "answer": (
+                "چیزی مرتبط با همین پیام در دانش محلی پیدا نکردم.\n"
+                "لطفاً سؤال را واضح‌تر بپرسید؛ مثلاً: «کهکشان راه شیری چیست؟» یا «قانون دوم نیوتن را توضیح بده».\n"
+                "اگر کلید AI فعال باشد، همان مدل ابری پاسخ کامل‌تری می‌دهد."
+            ),
             "hits": [],
+            "provider": "kavosh-knowledge-empty",
         }
+
+    # Rank already sorted; take top
+    top = filtered[:limit]
     lines = [
-        "📚 پاسخ از موتور دانش کاوش (حالت جایگزین — بدون مدل ابری):",
+        "پاسخ بر اساس دانش کاوش (مرتبط با سؤال شما):",
         "",
     ]
-    for i, h in enumerate(hits[:limit], 1):
+    for i, h in enumerate(top, 1):
         title = h.get("title") or "منبع"
-        src = h.get("source") or ""
         body = (h.get("content") or "").strip()
-        lines.append(f"{i}) {title}" + (f" — {src}" if src else ""))
-        lines.append(body[:500])
+        # trim padded exercise noise if present
+        if "تمرین پیشنهادی" in body:
+            body = body.split("تمرین پیشنهادی")[0].strip()
+        lines.append(f"{i}) {title}")
+        lines.append(body[:450])
         lines.append("")
-    lines.append("اگر این پاسخ کامل نبود، سؤال را دقیق‌تر بپرسید یا وقتی سرویس AI در دسترس بود دوباره تلاش کنید.")
-    return {"ok": True, "answer": "\n".join(lines).strip(), "hits": hits[:limit]}
+    return {"ok": True, "answer": "\n".join(lines).strip(), "hits": top, "provider": "kavosh-knowledge"}
