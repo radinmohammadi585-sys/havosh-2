@@ -10,7 +10,6 @@ import sqlite3
 from knowledge.store import (
     ensure_knowledge_tables, ingest_document, search_chunks,
     list_documents, create_purchase, list_purchases, update_purchase_status,
-    seed_builtin_knowledge, answer_from_knowledge,
 )
 
 
@@ -517,131 +516,77 @@ def call_media(kind, prompt, client_overrides=None):
 
 
 
-
 def web_search(query: str, limit: int = 5) -> list[dict]:
-    """Web search with relevance filtering — skip off-topic Wikipedia/noise."""
+    """Best-effort web search without API keys. Multiple fallbacks."""
     from urllib.parse import quote_plus, parse_qs, unquote, urlparse as up
     q = (query or "").strip()[:200]
     if not q:
         return []
+    results: list[dict] = []
+    ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    errors = []
 
-    def norm(s: str) -> str:
-        s = (s or "").lower().replace("ي", "ی").replace("ك", "ک")
-        s = re.sub(r"[^\w\u0600-\u06ff\s]+", " ", s, flags=re.UNICODE)
-        return re.sub(r"\s+", " ", s).strip()
-
-    qn = norm(q)
-    # meaningful tokens (skip very short)
-    stop = {
-        "و", "در", "از", "به", "که", "را", "با", "این", "آن", "یک", "برای", "است", "هست",
-        "چیست", "چی", "کیه", "می", "های", "ها", "the", "a", "an", "of", "in", "to", "is", "what", "who",
-    }
-    tokens = [t for t in qn.split() if len(t) > 1 and t not in stop][:8]
-    if not tokens:
-        tokens = [t for t in qn.split() if t][:5]
-
-    ua = "Mozilla/5.0 (compatible; KavoshAI2/2.3; +https://example.com)"
-    raw_hits: list[dict] = []
-    errors: list[str] = []
-
-    def score_item(title: str, snippet: str) -> int:
-        blob = norm(title + " " + snippet)
-        title_n = norm(title)
-        if not blob:
-            return 0
-        sc = 0
-        words = set(blob.split())
-        for t in tokens:
-            # whole-word match only (سلام must not match سلامت)
-            if t in words:
-                sc += 4
-            elif title_n == t:
-                sc += 6
-            elif title_n.startswith(t + " "):
-                sc += 5
-            elif len(t) >= 5 and any(w.startswith(t) and len(w) <= len(t) + 2 for w in words):
-                sc += 1  # weak stem, long tokens only
-        if qn and (title_n == qn or title_n.startswith(qn + " ")):
-            sc += 6
-        elif qn and qn in blob:
-            sc += 2
-        # penalize film/disambiguation noise for factual queries
-        if any(x in title_n for x in ("فیلم", "ترانه", "آلبوم", "film", "song", "album", "disambiguation")):
-            sc -= 3
-        return sc
-
-    def add(title, url="", snippet="", source=""):
+    def add(title, url="", snippet=""):
         title = re.sub(r"\s+", " ", str(title or "")).strip()
-        snippet = re.sub(r"\s+", " ", str(snippet or "")).strip()
         if not title:
             return
-        sc = score_item(title, snippet)
-        # require at least one real token match for multi-token queries
-        if tokens and sc < 3:
-            return
-        raw_hits.append({
-            "title": title[:200],
-            "url": str(url or "")[:500],
-            "snippet": snippet[:320],
-            "source": source,
-            "score": sc,
-        })
+        results.append({"title": title[:200], "url": str(url or "")[:500], "snippet": str(snippet or "")[:300]})
 
-    # 1) DuckDuckGo Instant Answer first (often a direct abstract)
-    try:
-        ia = "https://api.duckduckgo.com/?q=" + quote_plus(q) + "&format=json&no_html=1&skip_disambig=1"
-        req = Request(ia, headers={"User-Agent": ua, "Accept": "application/json"}, method="GET")
-        with urlopen(req, timeout=12) as resp:
-            raw = resp.read(300_000).decode("utf-8", errors="replace").strip()
-            if raw:
-                data = json.loads(raw)
-                if data.get("AbstractText"):
-                    add(data.get("Heading") or q, data.get("AbstractURL") or "", data.get("AbstractText"), "ddg")
-                for t in (data.get("RelatedTopics") or [])[:8]:
-                    if isinstance(t, dict) and t.get("Text"):
-                        add(t.get("Text"), t.get("FirstURL") or "", t.get("Text"), "ddg")
-                    elif isinstance(t, dict):
-                        for tt in (t.get("Topics") or [])[:4]:
-                            if isinstance(tt, dict) and tt.get("Text"):
-                                add(tt.get("Text"), tt.get("FirstURL") or "", tt.get("Text"), "ddg")
-    except Exception as exc:
-        errors.append(f"ddg:{exc}")
-
-    # 2) Wikipedia only if title is relevant (fa preferred for Persian queries)
-    has_fa = any("\u0600" <= ch <= "\u06ff" for ch in q)
-    langs = ("fa", "en") if has_fa else ("en", "fa")
-    for lang in langs:
+    # 1) Wikipedia OpenSearch (fa then en)
+    for lang in ("fa", "en"):
+        if len(results) >= limit:
+            break
         try:
             api = (
                 f"https://{lang}.wikipedia.org/w/api.php?action=opensearch&search="
                 + quote_plus(q)
-                + "&limit=5&namespace=0&format=json"
+                + f"&limit={limit}&namespace=0&format=json"
             )
             req = Request(api, headers={"User-Agent": ua, "Accept": "application/json"}, method="GET")
             with urlopen(req, timeout=12) as resp:
-                data = json.loads(resp.read(300_000).decode("utf-8", errors="replace"))
+                raw = resp.read(300_000).decode("utf-8", errors="replace")
+                data = json.loads(raw)
+            # [query, [titles], [descs], [urls]]
             if isinstance(data, list) and len(data) >= 4:
                 titles, descs, urls = data[1], data[2], data[3]
-                for i in range(len(titles)):
-                    add(
-                        titles[i],
-                        urls[i] if i < len(urls) else "",
-                        descs[i] if i < len(descs) else "",
-                        f"wiki-{lang}",
-                    )
+                for i in range(min(len(titles), limit)):
+                    add(titles[i], urls[i] if i < len(urls) else "", descs[i] if i < len(descs) else "")
+                    if len(results) >= limit:
+                        break
         except Exception as exc:
             errors.append(f"wiki-{lang}:{exc}")
 
-    # 3) DDG HTML if still weak
-    if len([h for h in raw_hits if h["score"] >= 3]) < 2:
+    # 2) DuckDuckGo Instant Answer JSON
+    if len(results) < 2:
+        try:
+            ia = "https://api.duckduckgo.com/?q=" + quote_plus(q) + "&format=json&no_html=1&skip_disambig=1"
+            req = Request(ia, headers={"User-Agent": ua, "Accept": "application/json"}, method="GET")
+            with urlopen(req, timeout=12) as resp:
+                raw = resp.read(300_000).decode("utf-8", errors="replace").strip()
+                if raw:
+                    data = json.loads(raw)
+                    if data.get("AbstractText"):
+                        add(data.get("Heading") or q, data.get("AbstractURL") or "", data.get("AbstractText"))
+                    for t in (data.get("RelatedTopics") or []):
+                        if isinstance(t, dict) and t.get("Text"):
+                            add(t.get("Text"), t.get("FirstURL") or "", t.get("Text"))
+                        elif isinstance(t, dict) and isinstance(t.get("Topics"), list):
+                            for tt in t["Topics"]:
+                                if isinstance(tt, dict) and tt.get("Text"):
+                                    add(tt.get("Text"), tt.get("FirstURL") or "", tt.get("Text"))
+                        if len(results) >= limit:
+                            break
+        except Exception as exc:
+            errors.append(f"ddg-ia:{exc}")
+
+    # 3) DuckDuckGo HTML (last resort)
+    if len(results) < 1:
         try:
             url = "https://html.duckduckgo.com/html/?q=" + quote_plus(q)
             req = Request(url, headers={"User-Agent": ua, "Accept": "text/html"}, method="GET")
             with urlopen(req, timeout=15) as resp:
                 html = resp.read(500_000).decode("utf-8", errors="replace")
-            for m in re.finditer(
-                r'class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', html, re.I | re.S
-            ):
+            for m in re.finditer(r'class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', html, re.I | re.S):
                 href, title = m.group(1), re.sub(r"<[^>]+>", "", m.group(2))
                 if "uddg=" in href:
                     try:
@@ -649,57 +594,24 @@ def web_search(query: str, limit: int = 5) -> list[dict]:
                         href = unquote((qs.get("uddg") or [href])[0])
                     except Exception:
                         pass
-                sn = ""
-                # nearby snippet
-                add(title, href if href.startswith("http") else "", sn, "ddg-html")
-                if len(raw_hits) >= limit * 3:
+                if href.startswith("http"):
+                    add(title, href, "")
+                if len(results) >= limit:
                     break
         except Exception as exc:
             errors.append(f"ddg-html:{exc}")
 
-    # rank & filter
-    min_keep = 5 if len(tokens) <= 1 else 4
-    raw_hits.sort(key=lambda x: -int(x.get("score") or 0))
+    if not results:
+        raise RuntimeError("جست‌وجوی وب نتیجه‌ای نداد. " + ("; ".join(errors[:2]) if errors else "شبکه یا سرویس در دسترس نیست."))
+    # de-dupe by title
     seen = set()
     unique = []
-    for r in raw_hits:
-        if int(r.get("score") or 0) < min_keep:
-            continue
-        key = norm(r["title"])[:80]
+    for r in results:
+        key = r["title"].lower()
         if key in seen:
             continue
         seen.add(key)
-        unique.append({
-            "title": r["title"],
-            "url": r["url"],
-            "snippet": r["snippet"],
-            "score": r["score"],
-        })
-        if len(unique) >= limit:
-            break
-
-    if not unique:
-        # last resort: top scored even if weak, but mark low confidence — only if score>=2
-        for r in raw_hits:
-            if int(r.get("score") or 0) < 2:
-                continue
-            key = norm(r["title"])[:80]
-            if key in seen:
-                continue
-            seen.add(key)
-            unique.append({
-                "title": r["title"],
-                "url": r["url"],
-                "snippet": r["snippet"],
-                "score": r["score"],
-            })
-            if len(unique) >= min(3, limit):
-                break
-
-    if not unique:
-        raise RuntimeError(
-            "نتیجه مرتبطی در وب پیدا نشد. " + ("; ".join(errors[:2]) if errors else "عبارت را دقیق‌تر بنویسید.")
-        )
+        unique.append(r)
     return unique[:limit]
 
 
@@ -835,9 +747,6 @@ def init_db():
             );
             """)
             ensure_knowledge_tables(conn)
-            seeded = seed_builtin_knowledge(conn)
-            if seeded:
-                print(f"Kavosh knowledge seeded: {seeded} documents")
             conn.executescript('''
             CREATE TABLE IF NOT EXISTS news_posts (
                 id TEXT PRIMARY KEY,
@@ -1943,8 +1852,9 @@ class Handler(BaseHTTPRequestHandler):
                     except RuntimeError as exc:
                         search_error = str(exc)[:300]
                 if not API_KEY:
+                    # Still useful: pure web search without LLM
                     if want_search and search_results:
-                        lines = ["نتایج جست‌وجوی وب (بدون مدل AI):", ""]
+                        lines = ["نتایج جست‌وجوی وب (بدون مدل AI — کلید OpenRouter تنظیم نشده):", ""]
                         for i, r in enumerate(search_results, 1):
                             lines.append(f"{i}. {r.get('title') or 'بدون عنوان'}")
                             if r.get("snippet"):
@@ -1957,48 +1867,14 @@ class Handler(BaseHTTPRequestHandler):
                             "answer": "\n".join(lines).strip(),
                             "provider": "web-search",
                             "searchResults": search_results,
-                        })
-                    with lock:
-                        conn = db()
-                        try:
-                            kb = answer_from_knowledge(conn, message, limit=6)
-                        finally:
-                            conn.close()
-                    if kb.get("ok") and kb.get("answer"):
-                        return self.send_json(200, {
-                            "ok": True,
-                            "answer": kb["answer"],
-                            "provider": kb.get("provider") or "kavosh-knowledge",
-                            "note": "پاسخ از موتور کاوش (دانش یا احوال‌پرسی).",
-                        })
-                    # Auto web search when KB has nothing relevant
-                    try:
-                        web_hits = web_search(message, limit=5)
-                    except Exception as wexc:
-                        web_hits = []
-                        search_error = search_error or str(wexc)[:200]
-                    if web_hits:
-                        lines = ["نتایج جست‌وجوی وب برای پرسش شما:", ""]
-                        for i, r in enumerate(web_hits, 1):
-                            lines.append(f"{i}. {r.get('title') or 'بدون عنوان'}")
-                            if r.get("snippet"):
-                                lines.append("   " + str(r.get("snippet"))[:300])
-                            if r.get("url"):
-                                lines.append("   " + r["url"])
-                            lines.append("")
-                        return self.send_json(200, {
-                            "ok": True,
-                            "answer": "\n".join(lines).strip(),
-                            "provider": "web-search",
-                            "searchResults": web_hits,
-                            "note": "دانش محلی چیزی مرتبط نداشت؛ جست‌وجوی وب فعال شد.",
+                            "note": "برای پاسخ هوشمند، OPENROUTER_API_KEY را تنظیم کنید.",
                         })
                     if want_search and search_error:
-                        return self.send_json(502, {"ok": False, "error": search_error})
-                    return self.send_json(200, {
-                        "ok": True,
-                        "answer": "چیزی مرتبط پیدا نکردم. سؤال را دقیق‌تر بپرسید یا کمی بعد دوباره تلاش کنید.",
-                        "provider": "kavosh-empty",
+                        return self.send_json(502, {"ok": False, "error": search_error, "setupRequired": False})
+                    return self.send_json(503, {
+                        "ok": False,
+                        "error": "کلید API تنظیم نشده است. OPENROUTER_API_KEY را در تنظیمات خصوصی سرور وارد کن. برای جست‌وجوی وب بدون AI، گزینه «جست‌وجوی وب» را فعال کنید.",
+                        "setupRequired": True,
                     })
                 hist = body.get("history", [])
                 if not isinstance(hist, list): hist = []
@@ -2063,51 +1939,9 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 if status < 200 or status >= 300:
                     err = (data.get("error") or {}).get("message") if isinstance(data.get("error"), dict) else data.get("error")
-                    with lock:
-                        conn = db()
-                        try:
-                            kb = answer_from_knowledge(conn, message, limit=6)
-                        finally:
-                            conn.close()
-                    if kb.get("ok") and kb.get("answer"):
-                        return self.send_json(200, {
-                            "ok": True,
-                            "answer": kb["answer"],
-                            "provider": kb.get("provider") or "kavosh-knowledge",
-                            "note": f"سرویس AI خطا/محدودیت ({status})؛ موتور کاوش فعال شد.",
-                            "upstreamError": str(err or status)[:300],
-                        })
-                    try:
-                        web_hits = web_search(message, limit=5)
-                    except Exception:
-                        web_hits = []
-                    if web_hits:
-                        lines = [f"سرویس AI محدود شد ({status}). نتایج وب:", ""]
-                        for i, r in enumerate(web_hits, 1):
-                            lines.append(f"{i}. {r.get('title') or ''}")
-                            if r.get("snippet"):
-                                lines.append("   " + str(r["snippet"])[:280])
-                            if r.get("url"):
-                                lines.append("   " + r["url"])
-                            lines.append("")
-                        return self.send_json(200, {
-                            "ok": True,
-                            "answer": "\n".join(lines).strip(),
-                            "provider": "web-search",
-                            "searchResults": web_hits,
-                        })
                     return self.send_json(500, {"ok": False, "error": str(err or f"خطای سرویس هوش مصنوعی ({status})")[:500]})
                 answer = ((data.get("choices") or [{}])[0].get("message") or {}).get("content")
-                if not isinstance(answer, str) or not answer.strip():
-                    with lock:
-                        conn = db()
-                        try:
-                            kb = answer_from_knowledge(conn, message, limit=6)
-                        finally:
-                            conn.close()
-                    if kb.get("ok") and kb.get("answer"):
-                        return self.send_json(200, {"ok": True, "answer": kb["answer"], "provider": "kavosh-knowledge", "note": "پاسخ مدل خالی بود؛ دانش کاوش فعال شد."})
-                    return self.send_json(500, {"ok": False, "error": "پاسخ خالی از سرویس دریافت شد."})
+                if not isinstance(answer, str) or not answer.strip(): return self.send_json(500, {"ok": False, "error": "پاسخ خالی از سرویس دریافت شد."})
                 out = {"ok": True, "answer": answer.strip(), "provider": "openrouter"}
                 if search_results:
                     out["searchResults"] = search_results
