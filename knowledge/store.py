@@ -201,37 +201,75 @@ def seed_builtin_knowledge(conn) -> int:
     return n
 
 
-def _is_smalltalk(query: str) -> str | None:
-    """If message is greeting/thanks/bye, return a fixed polite reply."""
+
+def _norm_fa(query: str) -> str:
     q = (query or "").strip().lower()
-    q = q.replace("ي", "ی").replace("ك", "ک")
-    # normalize extra spaces/punct
+    q = q.replace("ي", "ی").replace("ك", "ک").replace("ة", "ه")
     import re as _re
-    core = _re.sub(r"[!?.،,]+", " ", q)
-    core = _re.sub(r"\s+", " ", core).strip()
-    greetings = {
-        "سلام", "سلام علیکم", "درود", "هی", "hello", "hi", "hey", "salam",
-        "صبح بخیر", "ظهر بخیر", "عصر بخیر", "شب بخیر", "روز بخیر",
+    q = _re.sub(r"[!?.؟،,؛:\"'«»()\[\]{}\u061f\uff1f]+", " ", q)
+    q = _re.sub(r"\s+", " ", q).strip()
+    return q
+
+
+def _is_smalltalk(query: str) -> str | None:
+    """Broad Persian/English greetings and chit-chat — never send these to KB search."""
+    import re as _re
+    core = _norm_fa(query)
+    if not core:
+        return None
+
+    # exact and contains patterns
+    greet_exact = {
+        "سلام", "سلام علیکم", "سلام علیکم و رحمت الله", "درود", "درود بر شما",
+        "هی", "هوی", "hello", "hi", "hey", "salam", "yo",
+        "صبح بخیر", "ظهر بخیر", "عصر بخیر", "شب بخیر", "روز بخیر", "وقت بخیر",
     }
-    thanks = {"ممنون", "مرسی", "تشکر", "خیلی ممنون", "thanks", "thank you"}
-    byes = {"خداحافظ", "فعلا", "فعلاً", "بدرود", "bye", "goodbye"}
-    how = {"حالت چطوره", "چطوری", "خوبی", "how are you"}
-    if core in greetings or core.rstrip("ا") in greetings:
-        return "سلام! من کاوش هستم 👋 بپرسید از درس، علوم، ریاضی، نجوم یا هر موضوع درسی — سعی می‌کنم دقیق جواب بدهم."
-    if core in thanks:
-        return "خواهش می‌کنم. اگر سؤال دیگری دارید بپرسید."
-    if core in byes:
-        return "خداحافظ! موفق باشید."
-    if core in how:
-        return "ممنون، آماده‌ام کمکتان کنم. چه سؤالی دارید؟"
-    # very short non-question chatter
-    if len(core) <= 3 and core in {"خوب", "عالی", "باشه", "اوکی", "ok"}:
-        return "باشه. هر وقت سؤال داشتید بپرسید."
+    if core in greet_exact or any(core == g or core.startswith(g + " ") for g in greet_exact):
+        return (
+            "سلام! من کاوش هستم 👋\n"
+            "حالم خوبه و آماده‌ام کمکتان کنم.\n"
+            "از درس، علوم، ریاضی، نجوم یا هر موضوعی بپرسید — یا بگویید براتان در وب جست‌وجو کنم."
+        )
+
+    how_patterns = [
+        r"^خوبی\s*$", r"^خوبید\s*$", r"^خوب هستی", r"^حالت چطور", r"^حالت چطوره",
+        r"^چطوری\s*$", r"^چطوره\s*$", r"^چطورید", r"^چه طور", r"^how are you",
+        r"^what'?s up", r"^چه خبر", r"^اخوال", r"^احوال", r"^خوب هستین",
+        r"^خوبی\s*\?", r"^خوبی\?",
+    ]
+    if any(_re.search(p, core) for p in how_patterns) or core in {
+        "خوبی", "خوبید", "چطوری", "چطوره", "چه خبر", "حالت چطوره", "حالت چطوره؟",
+    }:
+        return (
+            "ممنون، خوبم 🌟\n"
+            "آماده‌ام برای درس، سؤال علمی، یا جست‌وجوی وب کمکتان کنم.\n"
+            "چه کاری برایتان انجام بدهم؟"
+        )
+
+    thanks = {"ممنون", "ممنونم", "مرسی", "متشکرم", "تشکر", "خیلی ممنون", "دمت گرم", "thanks", "thank you", "thx"}
+    if core in thanks or any(core.startswith(t) for t in ("ممنون", "مرسی", "تشکر", "thank")):
+        return "خواهش می‌کنم 😊 اگر سؤال دیگری دارید بپرسید."
+
+    byes = {"خداحافظ", "خدا حافظ", "فعلا", "فعلاً", "بدرود", "بای", "bye", "goodbye", "see you"}
+    if core in byes or core.startswith("خداحافظ"):
+        return "خداحافظ! موفق باشید 👋"
+
+    ok_set = {"خوب", "عالی", "باشه", "باشه ممنون", "اوکی", "ok", "okay", "yes", "بله", "آره", "نه", "نخیر"}
+    if core in ok_set:
+        return "باشه. هر وقت سؤال داشتید بپرسید — می‌توانم از دانش کاوش یا وب کمک کنم."
+
+    who = {"کی هستی", "تو کی هستی", "اسمت چیه", "who are you", "what are you"}
+    if core in who or "کی هستی" in core or "who are you" in core:
+        return (
+            "من کاوش هستم؛ دستیار آموزشی مدرسه.\n"
+            "می‌توانم از پایگاه دانش کاوش جواب بدهم و در صورت نیاز در وب جست‌وجو کنم."
+        )
+
     return None
 
 
 def answer_from_knowledge(conn, query: str, limit: int = 6) -> dict:
-    """Answer only when knowledge is relevant; avoid random dumps for hello/etc."""
+    """Relevant KB answers only; smalltalk never hits the corpus."""
     q = (query or "").strip()
     if not q:
         return {"ok": False, "answer": None, "hits": []}
@@ -241,42 +279,32 @@ def answer_from_knowledge(conn, query: str, limit: int = 6) -> dict:
         return {"ok": True, "answer": small, "hits": [], "provider": "smalltalk"}
 
     hits = search_chunks(conn, q, limit=max(limit, 8))
-    # Keep only reasonably relevant hits (score from search_chunks)
-    # search scores: term matches; require minimum score so "سلام" doesn't match junk
-    min_score = 3
-    # longer queries can use slightly lower bar if multiple terms match
-    tokens = [t for t in __import__("re").split(r"\s+", q) if len(t) > 1]
-    if len(tokens) >= 3:
-        min_score = 2
+    min_score = 4  # stricter to avoid weak matches
+    tokens = [t for t in __import__("re").split(r"\s+", _norm_fa(q)) if len(t) > 1]
+    if len(tokens) >= 4:
+        min_score = 3
 
     filtered = [h for h in (hits or []) if int(h.get("score") or 0) >= min_score]
-
-    # Do NOT broaden to single short tokens — that caused irrelevant answers
     if not filtered:
+        # Signal caller to try web search — do not invent irrelevant KB text
         return {
-            "ok": True,
-            "answer": (
-                "چیزی مرتبط با همین پیام در دانش محلی پیدا نکردم.\n"
-                "لطفاً سؤال را واضح‌تر بپرسید؛ مثلاً: «کهکشان راه شیری چیست؟» یا «قانون دوم نیوتن را توضیح بده».\n"
-                "اگر کلید AI فعال باشد، همان مدل ابری پاسخ کامل‌تری می‌دهد."
-            ),
+            "ok": False,
+            "answer": None,
             "hits": [],
             "provider": "kavosh-knowledge-empty",
+            "need_web": True,
         }
 
-    # Rank already sorted; take top
     top = filtered[:limit]
-    lines = [
-        "پاسخ بر اساس دانش کاوش (مرتبط با سؤال شما):",
-        "",
-    ]
+    lines = ["پاسخ بر اساس دانش کاوش (مرتبط با سؤال شما):", ""]
     for i, h in enumerate(top, 1):
         title = h.get("title") or "منبع"
         body = (h.get("content") or "").strip()
-        # trim padded exercise noise if present
         if "تمرین پیشنهادی" in body:
             body = body.split("تمرین پیشنهادی")[0].strip()
         lines.append(f"{i}) {title}")
         lines.append(body[:450])
         lines.append("")
     return {"ok": True, "answer": "\n".join(lines).strip(), "hits": top, "provider": "kavosh-knowledge"}
+
+
