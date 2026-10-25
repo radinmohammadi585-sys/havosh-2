@@ -1694,7 +1694,7 @@ class Handler(BaseHTTPRequestHandler):
             if not s or not is_staff(str(s.get("role") or "")):
                 return self.send_json(401, {"ok": False, "error": "فقط کارکنان می‌توانند سند اضافه کنند."})
             try:
-                body = self.read_json(1_000_100_000)
+                body = self.read_json(600_000)
             except ValueError as exc:
                 return self.send_json(400, {"ok": False, "error": str(exc)})
             title = str(body.get("title") or "سند").strip()
@@ -1881,15 +1881,37 @@ class Handler(BaseHTTPRequestHandler):
                         return self.send_json(200, {
                             "ok": True,
                             "answer": kb["answer"],
-                            "provider": "kavosh-knowledge",
-                            "note": "کلید AI نیست یا در دسترس نیست؛ پاسخ از موتور دانش کاوش.",
+                            "provider": kb.get("provider") or "kavosh-knowledge",
+                            "note": "پاسخ از موتور کاوش (دانش یا احوال‌پرسی).",
+                        })
+                    # Auto web search when KB has nothing relevant
+                    try:
+                        web_hits = web_search(message, limit=5)
+                    except Exception as wexc:
+                        web_hits = []
+                        search_error = search_error or str(wexc)[:200]
+                    if web_hits:
+                        lines = ["نتایج جست‌وجوی وب برای پرسش شما:", ""]
+                        for i, r in enumerate(web_hits, 1):
+                            lines.append(f"{i}. {r.get('title') or 'بدون عنوان'}")
+                            if r.get("snippet"):
+                                lines.append("   " + str(r.get("snippet"))[:300])
+                            if r.get("url"):
+                                lines.append("   " + r["url"])
+                            lines.append("")
+                        return self.send_json(200, {
+                            "ok": True,
+                            "answer": "\n".join(lines).strip(),
+                            "provider": "web-search",
+                            "searchResults": web_hits,
+                            "note": "دانش محلی چیزی مرتبط نداشت؛ جست‌وجوی وب فعال شد.",
                         })
                     if want_search and search_error:
                         return self.send_json(502, {"ok": False, "error": search_error})
-                    return self.send_json(503, {
-                        "ok": False,
-                        "error": "کلید AI تنظیم نیست و در دانش کاوش مطلب مرتبطی نبود.",
-                        "setupRequired": True,
+                    return self.send_json(200, {
+                        "ok": True,
+                        "answer": "چیزی مرتبط پیدا نکردم. سؤال را دقیق‌تر بپرسید یا کمی بعد دوباره تلاش کنید.",
+                        "provider": "kavosh-empty",
                     })
                 hist = body.get("history", [])
                 if not isinstance(hist, list): hist = []
@@ -1964,9 +1986,28 @@ class Handler(BaseHTTPRequestHandler):
                         return self.send_json(200, {
                             "ok": True,
                             "answer": kb["answer"],
-                            "provider": "kavosh-knowledge",
-                            "note": f"سرویس AI خطا/محدودیت ({status})؛ موتور دانش کاوش فعال شد.",
+                            "provider": kb.get("provider") or "kavosh-knowledge",
+                            "note": f"سرویس AI خطا/محدودیت ({status})؛ موتور کاوش فعال شد.",
                             "upstreamError": str(err or status)[:300],
+                        })
+                    try:
+                        web_hits = web_search(message, limit=5)
+                    except Exception:
+                        web_hits = []
+                    if web_hits:
+                        lines = [f"سرویس AI محدود شد ({status}). نتایج وب:", ""]
+                        for i, r in enumerate(web_hits, 1):
+                            lines.append(f"{i}. {r.get('title') or ''}")
+                            if r.get("snippet"):
+                                lines.append("   " + str(r["snippet"])[:280])
+                            if r.get("url"):
+                                lines.append("   " + r["url"])
+                            lines.append("")
+                        return self.send_json(200, {
+                            "ok": True,
+                            "answer": "\n".join(lines).strip(),
+                            "provider": "web-search",
+                            "searchResults": web_hits,
                         })
                     return self.send_json(500, {"ok": False, "error": str(err or f"خطای سرویس هوش مصنوعی ({status})")[:500]})
                 answer = ((data.get("choices") or [{}])[0].get("message") or {}).get("content")
