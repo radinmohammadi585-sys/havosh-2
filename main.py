@@ -10,6 +10,7 @@ import sqlite3
 from knowledge.store import (
     ensure_knowledge_tables, ingest_document, search_chunks,
     list_documents, create_purchase, list_purchases, update_purchase_status,
+    seed_builtin_knowledge, answer_from_knowledge,
 )
 
 
@@ -111,18 +112,64 @@ def safe_math(expression: str):
         raise ValueError("عبارت ریاضی معتبر نیست")
     return calc(tree)
 
+
 def solve_math(text: str):
-    s = normalize_digits(text).strip()
-    s = re.sub(r"^(?:حاصل|محاسبه کن|حساب کن|جواب|solve|calculate)\s*[:：]?\s*", "", s, flags=re.I)
-    s = re.sub(r"[؟?=]+$", "", s).strip()
-    if not s or not re.search(r"[+*/^%]|\d\s*-\s*\d", s) or not re.fullmatch(r"[\d\s().,+\-*/%^eE]+", s): return None
+    """Arithmetic with Persian phrases: «۲ به علاوه ۲»، «۵ منهای ۱»، «۳ ضربدر ۴»."""
+    s = normalize_digits(text or "").strip()
+    if not s:
+        return None
+    low = s.replace("ي", "ی").replace("ك", "ک")
+    low = re.sub(r"^(?:حاصل|محاسبه کن|حساب کن|جواب|بگو|solve|calculate)\s*[:：]?\s*", "", low, flags=re.I)
+    low = re.sub(r"[؟?=]+$", "", low).strip()
+
+    reps = [
+        (r"به\s*علاوه", "+"),
+        (r"به\s*اضافه", "+"),
+        (r"جمع(?:\s*با|\s*و)?", "+"),
+        (r"plus", "+"),
+        (r"منهای", "-"),
+        (r"منها(?!ی)", "-"),
+        (r"تفریق", "-"),
+        (r"minus", "-"),
+        (r"ضربدر", "*"),
+        (r"ضرب\s*در", "*"),
+        (r"times", "*"),
+        (r"تقسیم\s*بر", "/"),
+        (r"بخش\s*بر", "/"),
+        (r"divided\s*by", "/"),
+        (r"توان", "**"),
+    ]
+    out = low
+    for pat, rep in reps:
+        out = re.sub(pat, rep, out, flags=re.I)
+    out = out.replace("×", "*").replace("÷", "/").replace("^", "**")
+    out = re.sub(r"(\d)\s*[xX]\s*(\d)", r"\1*\2", out)
+    out = re.sub(r"\b(?:مساوی|برابر(?:\s*است)?|میشه|می‌شه|چیست|چقدر)\b", " ", out, flags=re.I)
+    out = re.sub(r"\s+", " ", out).strip()
+    expr = re.sub(r"\s+", "", out)
+    if not re.search(r"\d", expr):
+        return None
+    if not re.search(r"[+\-*/]", expr) and "**" not in expr:
+        return None
+    # sanitize: digits and operators only
+    if not re.fullmatch(r"[\d().,+\-*/]+", expr.replace("**", "")):
+        return None
     try:
-        n = safe_math(s)
-        return f"پاسخ: {float(f'{n:.12g}')}"
-    except ValueError as exc:
-        return f"خطای ریاضی: {exc}"
-    except (OverflowError, ZeroDivisionError):
-        return "خطای ریاضی: نتیجه معتبر نیست"
+        if "**" in expr:
+            m = re.fullmatch(r"([\d.]+)\*\*([\d.]+)", expr)
+            if not m:
+                return None
+            n = float(m.group(1)) ** float(m.group(2))
+        else:
+            n = safe_math(expr)
+        n = float(f"{n:.12g}")
+        if n == int(n) and abs(n) < 1e15:
+            return f"پاسخ: {int(n)}"
+        return f"پاسخ: {n}"
+    except Exception:
+        return None
+
+
 
 def call_json_api(url: str, key: str, payload: dict, timeout=60, extra_headers=None):
     headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
@@ -516,77 +563,131 @@ def call_media(kind, prompt, client_overrides=None):
 
 
 
+
 def web_search(query: str, limit: int = 5) -> list[dict]:
-    """Best-effort web search without API keys. Multiple fallbacks."""
+    """Web search with relevance filtering — skip off-topic Wikipedia/noise."""
     from urllib.parse import quote_plus, parse_qs, unquote, urlparse as up
     q = (query or "").strip()[:200]
     if not q:
         return []
-    results: list[dict] = []
-    ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    errors = []
 
-    def add(title, url="", snippet=""):
+    def norm(s: str) -> str:
+        s = (s or "").lower().replace("ي", "ی").replace("ك", "ک")
+        s = re.sub(r"[^\w\u0600-\u06ff\s]+", " ", s, flags=re.UNICODE)
+        return re.sub(r"\s+", " ", s).strip()
+
+    qn = norm(q)
+    # meaningful tokens (skip very short)
+    stop = {
+        "و", "در", "از", "به", "که", "را", "با", "این", "آن", "یک", "برای", "است", "هست",
+        "چیست", "چی", "کیه", "می", "های", "ها", "the", "a", "an", "of", "in", "to", "is", "what", "who",
+    }
+    tokens = [t for t in qn.split() if len(t) > 1 and t not in stop][:8]
+    if not tokens:
+        tokens = [t for t in qn.split() if t][:5]
+
+    ua = "Mozilla/5.0 (compatible; KavoshAI2/2.3; +https://example.com)"
+    raw_hits: list[dict] = []
+    errors: list[str] = []
+
+    def score_item(title: str, snippet: str) -> int:
+        blob = norm(title + " " + snippet)
+        title_n = norm(title)
+        if not blob:
+            return 0
+        sc = 0
+        words = set(blob.split())
+        for t in tokens:
+            # whole-word match only (سلام must not match سلامت)
+            if t in words:
+                sc += 4
+            elif title_n == t:
+                sc += 6
+            elif title_n.startswith(t + " "):
+                sc += 5
+            elif len(t) >= 5 and any(w.startswith(t) and len(w) <= len(t) + 2 for w in words):
+                sc += 1  # weak stem, long tokens only
+        if qn and (title_n == qn or title_n.startswith(qn + " ")):
+            sc += 6
+        elif qn and qn in blob:
+            sc += 2
+        # penalize film/disambiguation noise for factual queries
+        if any(x in title_n for x in ("فیلم", "ترانه", "آلبوم", "film", "song", "album", "disambiguation")):
+            sc -= 3
+        return sc
+
+    def add(title, url="", snippet="", source=""):
         title = re.sub(r"\s+", " ", str(title or "")).strip()
+        snippet = re.sub(r"\s+", " ", str(snippet or "")).strip()
         if not title:
             return
-        results.append({"title": title[:200], "url": str(url or "")[:500], "snippet": str(snippet or "")[:300]})
+        sc = score_item(title, snippet)
+        # require at least one real token match for multi-token queries
+        if tokens and sc < 3:
+            return
+        raw_hits.append({
+            "title": title[:200],
+            "url": str(url or "")[:500],
+            "snippet": snippet[:320],
+            "source": source,
+            "score": sc,
+        })
 
-    # 1) Wikipedia OpenSearch (fa then en)
-    for lang in ("fa", "en"):
-        if len(results) >= limit:
-            break
+    # 1) DuckDuckGo Instant Answer first (often a direct abstract)
+    try:
+        ia = "https://api.duckduckgo.com/?q=" + quote_plus(q) + "&format=json&no_html=1&skip_disambig=1"
+        req = Request(ia, headers={"User-Agent": ua, "Accept": "application/json"}, method="GET")
+        with urlopen(req, timeout=12) as resp:
+            raw = resp.read(300_000).decode("utf-8", errors="replace").strip()
+            if raw:
+                data = json.loads(raw)
+                if data.get("AbstractText"):
+                    add(data.get("Heading") or q, data.get("AbstractURL") or "", data.get("AbstractText"), "ddg")
+                for t in (data.get("RelatedTopics") or [])[:8]:
+                    if isinstance(t, dict) and t.get("Text"):
+                        add(t.get("Text"), t.get("FirstURL") or "", t.get("Text"), "ddg")
+                    elif isinstance(t, dict):
+                        for tt in (t.get("Topics") or [])[:4]:
+                            if isinstance(tt, dict) and tt.get("Text"):
+                                add(tt.get("Text"), tt.get("FirstURL") or "", tt.get("Text"), "ddg")
+    except Exception as exc:
+        errors.append(f"ddg:{exc}")
+
+    # 2) Wikipedia only if title is relevant (fa preferred for Persian queries)
+    has_fa = any("\u0600" <= ch <= "\u06ff" for ch in q)
+    langs = ("fa", "en") if has_fa else ("en", "fa")
+    for lang in langs:
         try:
             api = (
                 f"https://{lang}.wikipedia.org/w/api.php?action=opensearch&search="
                 + quote_plus(q)
-                + f"&limit={limit}&namespace=0&format=json"
+                + "&limit=5&namespace=0&format=json"
             )
             req = Request(api, headers={"User-Agent": ua, "Accept": "application/json"}, method="GET")
             with urlopen(req, timeout=12) as resp:
-                raw = resp.read(300_000).decode("utf-8", errors="replace")
-                data = json.loads(raw)
-            # [query, [titles], [descs], [urls]]
+                data = json.loads(resp.read(300_000).decode("utf-8", errors="replace"))
             if isinstance(data, list) and len(data) >= 4:
                 titles, descs, urls = data[1], data[2], data[3]
-                for i in range(min(len(titles), limit)):
-                    add(titles[i], urls[i] if i < len(urls) else "", descs[i] if i < len(descs) else "")
-                    if len(results) >= limit:
-                        break
+                for i in range(len(titles)):
+                    add(
+                        titles[i],
+                        urls[i] if i < len(urls) else "",
+                        descs[i] if i < len(descs) else "",
+                        f"wiki-{lang}",
+                    )
         except Exception as exc:
             errors.append(f"wiki-{lang}:{exc}")
 
-    # 2) DuckDuckGo Instant Answer JSON
-    if len(results) < 2:
-        try:
-            ia = "https://api.duckduckgo.com/?q=" + quote_plus(q) + "&format=json&no_html=1&skip_disambig=1"
-            req = Request(ia, headers={"User-Agent": ua, "Accept": "application/json"}, method="GET")
-            with urlopen(req, timeout=12) as resp:
-                raw = resp.read(300_000).decode("utf-8", errors="replace").strip()
-                if raw:
-                    data = json.loads(raw)
-                    if data.get("AbstractText"):
-                        add(data.get("Heading") or q, data.get("AbstractURL") or "", data.get("AbstractText"))
-                    for t in (data.get("RelatedTopics") or []):
-                        if isinstance(t, dict) and t.get("Text"):
-                            add(t.get("Text"), t.get("FirstURL") or "", t.get("Text"))
-                        elif isinstance(t, dict) and isinstance(t.get("Topics"), list):
-                            for tt in t["Topics"]:
-                                if isinstance(tt, dict) and tt.get("Text"):
-                                    add(tt.get("Text"), tt.get("FirstURL") or "", tt.get("Text"))
-                        if len(results) >= limit:
-                            break
-        except Exception as exc:
-            errors.append(f"ddg-ia:{exc}")
-
-    # 3) DuckDuckGo HTML (last resort)
-    if len(results) < 1:
+    # 3) DDG HTML if still weak
+    if len([h for h in raw_hits if h["score"] >= 3]) < 2:
         try:
             url = "https://html.duckduckgo.com/html/?q=" + quote_plus(q)
             req = Request(url, headers={"User-Agent": ua, "Accept": "text/html"}, method="GET")
             with urlopen(req, timeout=15) as resp:
                 html = resp.read(500_000).decode("utf-8", errors="replace")
-            for m in re.finditer(r'class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', html, re.I | re.S):
+            for m in re.finditer(
+                r'class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', html, re.I | re.S
+            ):
                 href, title = m.group(1), re.sub(r"<[^>]+>", "", m.group(2))
                 if "uddg=" in href:
                     try:
@@ -594,25 +695,236 @@ def web_search(query: str, limit: int = 5) -> list[dict]:
                         href = unquote((qs.get("uddg") or [href])[0])
                     except Exception:
                         pass
-                if href.startswith("http"):
-                    add(title, href, "")
-                if len(results) >= limit:
+                sn = ""
+                # nearby snippet
+                add(title, href if href.startswith("http") else "", sn, "ddg-html")
+                if len(raw_hits) >= limit * 3:
                     break
         except Exception as exc:
             errors.append(f"ddg-html:{exc}")
 
-    if not results:
-        raise RuntimeError("جست‌وجوی وب نتیجه‌ای نداد. " + ("; ".join(errors[:2]) if errors else "شبکه یا سرویس در دسترس نیست."))
-    # de-dupe by title
+    # rank & filter
+    min_keep = 5 if len(tokens) <= 1 else 4
+    raw_hits.sort(key=lambda x: -int(x.get("score") or 0))
     seen = set()
     unique = []
-    for r in results:
-        key = r["title"].lower()
+    for r in raw_hits:
+        if int(r.get("score") or 0) < min_keep:
+            continue
+        key = norm(r["title"])[:80]
         if key in seen:
             continue
         seen.add(key)
-        unique.append(r)
+        unique.append({
+            "title": r["title"],
+            "url": r["url"],
+            "snippet": r["snippet"],
+            "score": r["score"],
+        })
+        if len(unique) >= limit:
+            break
+
+    if not unique:
+        # last resort: top scored even if weak, but mark low confidence — only if score>=2
+        for r in raw_hits:
+            if int(r.get("score") or 0) < 2:
+                continue
+            key = norm(r["title"])[:80]
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append({
+                "title": r["title"],
+                "url": r["url"],
+                "snippet": r["snippet"],
+                "score": r["score"],
+            })
+            if len(unique) >= min(3, limit):
+                break
+
+    if not unique:
+        return []  # caller may try other fallbacks; never hard-fail the chat
     return unique[:limit]
+
+
+
+
+def summarize_web_results(query: str, results: list) -> str:
+    """Turn search hits into a short Persian summary (not a raw link list)."""
+    from urllib.parse import quote, unquote, urlparse
+    q = (query or "").strip()
+    if not results:
+        return "چیز مرتبطی در وب پیدا نشد."
+
+    ua = "Mozilla/5.0 (compatible; KavoshAI2/2.4)"
+    extracts: list[str] = []
+    sources: list[str] = []
+
+    def wiki_summary_from_url(url: str) -> str:
+        try:
+            p = urlparse(url)
+            if "wikipedia.org" not in (p.netloc or ""):
+                return ""
+            # /wiki/Title
+            parts = (p.path or "").split("/wiki/")
+            if len(parts) < 2 or not parts[1]:
+                return ""
+            title = unquote(parts[1]).replace(" ", "_")
+            lang = "fa" if p.netloc.startswith("fa.") else ("en" if p.netloc.startswith("en.") else "fa")
+            api = f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/{quote(title)}"
+            req = Request(api, headers={"User-Agent": ua, "Accept": "application/json"}, method="GET")
+            with urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read(200_000).decode("utf-8", errors="replace"))
+            extract = (data.get("extract") or "").strip()
+            return extract[:800]
+        except Exception:
+            return ""
+
+    # Prefer Wikipedia extracts for real prose summary
+    for r in results[:5]:
+        url = r.get("url") or ""
+        ext = wiki_summary_from_url(url)
+        if ext and ext not in extracts:
+            # drop film/song noise unless user asked for it
+            qlow = q.lower()
+            if not any(w in qlow for w in ("فیلم", "film", "movie", "ترانه", "آهنگ")):
+                if any(w in ext for w in ("فیلم کوتاه", "فیلمی است", "is a film", "is a song")):
+                    continue
+            extracts.append(ext)
+            if url:
+                sources.append(url)
+        if len(extracts) >= 2:
+            break
+
+    # Fallback: stitch high-score snippets into sentences
+    if not extracts:
+        for r in results[:5]:
+            sn = (r.get("snippet") or r.get("title") or "").strip()
+            sn = re.sub(r"\s+", " ", sn)
+            if len(sn) < 25:
+                continue
+            if sn not in extracts:
+                extracts.append(sn[:400])
+                if r.get("url"):
+                    sources.append(r["url"])
+            if len(extracts) >= 3:
+                break
+
+    if not extracts:
+        # last resort: titles only as a sentence
+        titles = [r.get("title") for r in results[:3] if r.get("title")]
+        if not titles:
+            return "چیز مرتبطی برای خلاصه کردن پیدا نشد."
+        return "بر اساس جست‌وجو، موارد مرتبط: " + "؛ ".join(titles) + "."
+
+    parts = [f"خلاصهٔ مرتبط با «{q}»:", ""]
+    for i, e in enumerate(extracts, 1):
+        parts.append(e)
+        if i < len(extracts):
+            parts.append("")
+    if sources:
+        parts.append("")
+        parts.append("منابع:")
+        for i, u in enumerate(sources[:4], 1):
+            parts.append(f"{i}. {u}")
+    return "\n".join(parts).strip()
+
+
+
+
+def wiki_direct_summary(query: str) -> str:
+    """Fetch a Wikipedia plain-language summary for the query if possible."""
+    from urllib.parse import quote_plus, quote
+    q = (query or "").strip()[:120]
+    if not q or len(q) < 2:
+        return ""
+    ua = "Mozilla/5.0 (compatible; KavoshAI2/2.5)"
+    has_fa = any("\u0600" <= c <= "\u06ff" for c in q)
+    langs = ("fa", "en") if has_fa else ("en", "fa")
+    for lang in langs:
+        try:
+            api = (
+                f"https://{lang}.wikipedia.org/w/api.php?action=opensearch&search="
+                + quote_plus(q) + "&limit=1&namespace=0&format=json"
+            )
+            req = Request(api, headers={"User-Agent": ua, "Accept": "application/json"}, method="GET")
+            with urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read(150_000).decode("utf-8", errors="replace"))
+            if not (isinstance(data, list) and len(data) > 1 and data[1]):
+                continue
+            title = data[1][0]
+            sum_url = f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/{quote(title)}"
+            req2 = Request(sum_url, headers={"User-Agent": ua, "Accept": "application/json"}, method="GET")
+            with urlopen(req2, timeout=10) as resp2:
+                js = json.loads(resp2.read(200_000).decode("utf-8", errors="replace"))
+            extract = (js.get("extract") or "").strip()
+            if extract and len(extract) > 40:
+                return extract[:900]
+        except Exception:
+            continue
+    return ""
+
+
+def always_answer(message: str) -> dict:
+    """Guarantee a non-empty answer: smalltalk → knowledge → web summary → wiki → safe reply."""
+    msg = (message or "").strip()
+    if not msg:
+        return {"ok": True, "answer": "پیامتان خالی بود. لطفاً سؤال را بنویسید.", "provider": "empty"}
+
+    # 1) knowledge + smalltalk
+    try:
+        with lock:
+            conn = db()
+            try:
+                kb = answer_from_knowledge(conn, msg, limit=6)
+            finally:
+                conn.close()
+        if kb.get("ok") and kb.get("answer"):
+            return {
+                "ok": True,
+                "answer": kb["answer"],
+                "provider": kb.get("provider") or "kavosh-knowledge",
+            }
+    except Exception:
+        pass
+
+    # 2) web search + summary
+    try:
+        hits = web_search(msg, limit=5)
+        if hits:
+            return {
+                "ok": True,
+                "answer": summarize_web_results(msg, hits),
+                "provider": "web-search-summary",
+                "searchResults": hits,
+            }
+    except Exception:
+        pass
+
+    # 3) direct Wikipedia summary
+    try:
+        wiki = wiki_direct_summary(msg)
+        if wiki:
+            return {
+                "ok": True,
+                "answer": f"خلاصه:\n\n{wiki}",
+                "provider": "wikipedia-summary",
+            }
+    except Exception:
+        pass
+
+    # 4) never leave the user empty — honest helpful fallback
+    return {
+        "ok": True,
+        "answer": (
+            f"در مورد «{msg[:120]}» الان نتوانستم منبع قوی پیدا کنم، اما این‌طور کمکتان می‌کنم:\n\n"
+            "• سؤال را کمی دقیق‌تر بنویسید (مثلاً موضوع + چه چیزی می‌خواهید بدانید).\n"
+            "• اگر درس مدرسه است، نام درس و پایه را بگویید.\n"
+            "• اگر تعریف یک واژه است، فقط همان واژه را بفرستید.\n\n"
+            "من کاوش هستم و با دانش محلی، وب و مدل AI (اگر فعال باشد) جواب می‌دهم. دوباره بپرسید؛ تا جایی که بتوانم پاسخ می‌دهم."
+        ),
+        "provider": "kavosh-always",
+    }
 
 
 
@@ -747,6 +1059,9 @@ def init_db():
             );
             """)
             ensure_knowledge_tables(conn)
+            seeded = seed_builtin_knowledge(conn)
+            if seeded:
+                print(f"Kavosh knowledge seeded: {seeded} documents")
             conn.executescript('''
             CREATE TABLE IF NOT EXISTS news_posts (
                 id TEXT PRIMARY KEY,
@@ -1852,30 +2167,17 @@ class Handler(BaseHTTPRequestHandler):
                     except RuntimeError as exc:
                         search_error = str(exc)[:300]
                 if not API_KEY:
-                    # Still useful: pure web search without LLM
                     if want_search and search_results:
-                        lines = ["نتایج جست‌وجوی وب (بدون مدل AI — کلید OpenRouter تنظیم نشده):", ""]
-                        for i, r in enumerate(search_results, 1):
-                            lines.append(f"{i}. {r.get('title') or 'بدون عنوان'}")
-                            if r.get("snippet"):
-                                lines.append("   " + r["snippet"])
-                            if r.get("url"):
-                                lines.append("   " + r["url"])
-                            lines.append("")
+                        summary = summarize_web_results(message, search_results)
                         return self.send_json(200, {
                             "ok": True,
-                            "answer": "\n".join(lines).strip(),
-                            "provider": "web-search",
+                            "answer": summary,
+                            "provider": "web-search-summary",
                             "searchResults": search_results,
-                            "note": "برای پاسخ هوشمند، OPENROUTER_API_KEY را تنظیم کنید.",
                         })
-                    if want_search and search_error:
-                        return self.send_json(502, {"ok": False, "error": search_error, "setupRequired": False})
-                    return self.send_json(503, {
-                        "ok": False,
-                        "error": "کلید API تنظیم نشده است. OPENROUTER_API_KEY را در تنظیمات خصوصی سرور وارد کن. برای جست‌وجوی وب بدون AI، گزینه «جست‌وجوی وب» را فعال کنید.",
-                        "setupRequired": True,
-                    })
+                    # Always produce an answer (knowledge → web → wiki → safe text)
+                    ans = always_answer(message)
+                    return self.send_json(200, ans)
                 hist = body.get("history", [])
                 if not isinstance(hist, list): hist = []
                 messages = [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -1924,7 +2226,7 @@ class Handler(BaseHTTPRequestHandler):
                     lines = []
                     for i, r in enumerate(search_results, 1):
                         lines.append(f"{i}. {r.get('title','')} — {r.get('url','')} {r.get('snippet','')}")
-                    web_block = "نتایج جست‌وجوی وب مرتبط:\n" + "\n".join(lines)
+                    web_block = summarize_web_results(message, search_results)
                     messages.append({"role": "system", "content": web_block + "\nاین منابع را در پاسخ ذکر کن و اگر مطمئن نیستی بگو."})
                 elif want_search and search_error:
                     messages.append({"role": "system", "content": f"(جست‌وجوی وب در دسترس نبود: {search_error})"})
@@ -1939,9 +2241,29 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 if status < 200 or status >= 300:
                     err = (data.get("error") or {}).get("message") if isinstance(data.get("error"), dict) else data.get("error")
-                    return self.send_json(500, {"ok": False, "error": str(err or f"خطای سرویس هوش مصنوعی ({status})")[:500]})
+                    with lock:
+                        conn = db()
+                        try:
+                            kb = answer_from_knowledge(conn, message, limit=6)
+                        finally:
+                            conn.close()
+                    if kb.get("ok") and kb.get("answer"):
+                        return self.send_json(200, {
+                            "ok": True,
+                            "answer": kb["answer"],
+                            "provider": kb.get("provider") or "kavosh-knowledge",
+                            "note": f"سرویس AI خطا/محدودیت ({status})؛ موتور کاوش فعال شد.",
+                            "upstreamError": str(err or status)[:300],
+                        })
+                    ans = always_answer(message)
+                    ans["note"] = f"سرویس AI خطا/محدودیت ({status})؛ پاسخ جایگزین کاوش."
+                    ans["upstreamError"] = str(err or status)[:300]
+                    return self.send_json(200, ans)
                 answer = ((data.get("choices") or [{}])[0].get("message") or {}).get("content")
-                if not isinstance(answer, str) or not answer.strip(): return self.send_json(500, {"ok": False, "error": "پاسخ خالی از سرویس دریافت شد."})
+                if not isinstance(answer, str) or not answer.strip():
+                    ans = always_answer(message)
+                    ans["note"] = "پاسخ مدل خالی بود؛ موتور کاوش جایگزین شد."
+                    return self.send_json(200, ans)
                 out = {"ok": True, "answer": answer.strip(), "provider": "openrouter"}
                 if search_results:
                     out["searchResults"] = search_results
