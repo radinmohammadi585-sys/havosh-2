@@ -6,6 +6,10 @@ import re
 import time
 from typing import Any
 
+# Capacity targets (configured limits; actual scale depends on server/database resources)
+MAX_KB_DOCUMENTS = 10_000_000
+MAX_DOCUMENT_CHARS = 1_000_000_000
+
 # lexical search helpers — no external vector DB required for v1
 
 def _norm(text: str) -> str:
@@ -72,12 +76,15 @@ def ingest_document(conn, title: str, content: str, source: str = "", lang: str 
     content = (content or "").strip()
     if len(content) < 10:
         raise ValueError("متن سند خیلی کوتاه است.")
-    if len(content) > 500_000:
+    if len(content) > MAX_DOCUMENT_CHARS:
         raise ValueError("حجم سند بیش از حد مجاز است.")
     h = content_hash(content)
     existing = conn.execute("SELECT id, title FROM kb_documents WHERE content_hash=?", (h,)).fetchone()
     if existing:
         return {"ok": True, "duplicate": True, "id": existing["id"], "title": existing["title"]}
+    count_row = conn.execute("SELECT COUNT(*) AS c FROM kb_documents").fetchone()
+    if int(count_row["c"] if count_row else 0) >= MAX_KB_DOCUMENTS:
+        raise ValueError("ظرفیت پایگاه دانش به ۱۰ میلیون سند رسیده است.")
     doc_id = h[:16]
     now = int(time.time())
     conn.execute(

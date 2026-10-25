@@ -1694,7 +1694,7 @@ class Handler(BaseHTTPRequestHandler):
             if not s or not is_staff(str(s.get("role") or "")):
                 return self.send_json(401, {"ok": False, "error": "فقط کارکنان می‌توانند سند اضافه کنند."})
             try:
-                body = self.read_json(600_000)
+                body = self.read_json(1_000_100_000)
             except ValueError as exc:
                 return self.send_json(400, {"ok": False, "error": str(exc)})
             title = str(body.get("title") or "سند").strip()
