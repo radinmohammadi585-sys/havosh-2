@@ -38,6 +38,10 @@ ROOT = Path(__file__).resolve().parent
 PUBLIC = ROOT / "public"
 DATA_DIR = ROOT / "data"
 DB_PATH = DATA_DIR / "kavosh.db"
+VIDEO_UPLOAD_DIR = DATA_DIR / "uploads" / "videos"
+MAX_VIDEO_UPLOAD_BYTES = 25 * 1024 * 1024
+ALLOWED_VIDEO_EXT = {".mp4", ".webm"}
+
 PORT = int(os.getenv("PORT", "3000"))
 API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
 MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/auto").strip()
@@ -1316,6 +1320,62 @@ def public_provider_status() -> dict:
     }
 
 
+
+
+def security_headers(handler, for_html=False):
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    handler.send_header("X-Frame-Options", "DENY")
+    handler.send_header("Referrer-Policy", "no-referrer")
+    handler.send_header("Permissions-Policy", "geolocation=(), microphone=(self), camera=()")
+    handler.send_header("Cross-Origin-Resource-Policy", "same-origin")
+    if for_html:
+        handler.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; "
+            "connect-src 'self' https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+        )
+
+
+def safe_video_id(vid: str) -> str:
+    vid = (vid or "").strip().upper()
+    return vid if re.fullmatch(r"V-[A-F0-9]{8}", vid) else ""
+
+
+def detect_video_ext(data: bytes, filename: str = "") -> str:
+    name = (filename or "").lower()
+    if name.endswith(".webm"):
+        return ".webm"
+    if name.endswith(".mp4"):
+        return ".mp4"
+    if data[:4] == b"\x1a\x45\xdf\xa3":
+        return ".webm"
+    if len(data) > 12 and data[4:8] == b"ftyp":
+        return ".mp4"
+    if b"ftyp" in data[:64]:
+        return ".mp4"
+    return ""
+
+
+def save_uploaded_video(vid: str, data: bytes, filename: str = "") -> str:
+    VIDEO_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    if len(data) > MAX_VIDEO_UPLOAD_BYTES:
+        raise ValueError(f"حداکثر حجم ویدئو {MAX_VIDEO_UPLOAD_BYTES // (1024*1024)} مگابایت است.")
+    if len(data) < 1000:
+        raise ValueError("فایل ویدئو خیلی کوچک است.")
+    ext = detect_video_ext(data, filename)
+    if ext not in ALLOWED_VIDEO_EXT:
+        raise ValueError("فقط mp4 و webm مجاز است.")
+    sid = safe_video_id(vid)
+    if not sid:
+        raise ValueError("شناسه نامعتبر")
+    dest = (VIDEO_UPLOAD_DIR / f"{sid}{ext}").resolve()
+    if not str(dest).startswith(str(VIDEO_UPLOAD_DIR.resolve())):
+        raise ValueError("مسیر نامعتبر")
+    dest.write_bytes(data)
+    return f"/media/videos/{sid}{ext}"
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "KavoshAI2-Python"
     def log_message(self, fmt, *args):
@@ -1326,8 +1386,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Referrer-Policy", "no-referrer")
+        security_headers(self, for_html=False)
         secure = is_https_request(self)
         if set_cookies:
             for name, value, max_age in set_cookies:
@@ -1401,6 +1460,27 @@ class Handler(BaseHTTPRequestHandler):
         return re.sub(r"^Bearer\s+", "", self.headers.get("Authorization", ""), flags=re.I).strip()
     def do_GET(self):
         path = urlparse(self.path).path
+
+        if path.startswith("/media/videos/"):
+            name = path[len("/media/videos/"):].split("?")[0]
+            if not re.fullmatch(r"V-[A-Fa-f0-9]{8}\.(mp4|webm)", name):
+                return self.send_json(400, {"ok": False, "error": "نام فایل نامعتبر"})
+            VIDEO_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+            fp = (VIDEO_UPLOAD_DIR / name).resolve()
+            if not str(fp).startswith(str(VIDEO_UPLOAD_DIR.resolve())) or not fp.is_file():
+                return self.send_json(404, {"ok": False, "error": "ویدئو پیدا نشد"})
+            data = fp.read_bytes()
+            ctype = "video/mp4" if name.endswith(".mp4") else "video/webm"
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Cache-Control", "public, max-age=3600")
+            security_headers(self, for_html=False)
+            self.end_headers()
+            self.wfile.write(data)
+            return
+
         if path == "/api/health":
             return self.send_json(200, {
                 "ok": True, "name": SITE_NAME, "version": "2.1.0", "provider": "openrouter", "runtime": "python",
@@ -2149,6 +2229,52 @@ class Handler(BaseHTTPRequestHandler):
                     conn.close()
             log_activity(str(s["role"]), "video_create", vid)
             return self.send_json(200, {"ok": True, "id": vid})
+
+
+
+        if path == "/api/videos/upload":
+            s = self.session()
+            if not s:
+                return self.send_json(401, {"ok": False, "error": "برای آپلود باید وارد شوید."})
+            cookies = parse_cookies(self.headers.get("Cookie", ""))
+            csrf_hdr = self.headers.get("X-CSRF-Token", "") or ""
+            try:
+                body = self.read_json(int(MAX_VIDEO_UPLOAD_BYTES * 1.45) + 80_000)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+            csrf = csrf_hdr or str(body.get("csrf") or "") or cookies.get(CSRF_COOKIE, "")
+            if not validate_csrf(csrf):
+                return self.send_json(403, {"ok": False, "error": "توکن امنیتی نامعتبر. صفحه را تازه کنید."})
+            title = str(body.get("title") or "").strip()[:200]
+            desc = str(body.get("description") or "").strip()[:2000]
+            filename = str(body.get("filename") or "video.mp4").strip()[:120]
+            b64 = str(body.get("data") or body.get("fileBase64") or "")
+            if not title or not b64:
+                return self.send_json(400, {"ok": False, "error": "عنوان و فایل لازم است."})
+            if "," in b64 and b64.lstrip().startswith("data:"):
+                b64 = b64.split(",", 1)[1]
+            try:
+                import base64 as _b64
+                raw = _b64.b64decode(b64, validate=False)
+            except Exception:
+                return self.send_json(400, {"ok": False, "error": "داده فایل نامعتبر"})
+            vid = "V-" + secrets.token_hex(4).upper()
+            try:
+                public_path = save_uploaded_video(vid, raw, filename)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+            with lock:
+                conn = db()
+                try:
+                    conn.execute(
+                        "INSERT INTO channel_videos (id, title, description, url, author, views, created_at) VALUES (?,?,?,?,?,0,?)",
+                        (vid, title, desc, public_path, str(s.get("role")), int(time.time())),
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
+            log_activity(str(s["role"]), "video_upload", vid)
+            return self.send_json(200, {"ok": True, "id": vid, "url": public_path})
 
 
         if path == "/api/chat":
