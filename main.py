@@ -45,8 +45,20 @@ ALLOWED_VIDEO_EXT = {".mp4", ".webm"}
 PORT = int(os.getenv("PORT", "3000"))
 API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
 MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/auto").strip()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-5-haiku-latest").strip()
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash").strip()
+XAI_API_KEY = os.getenv("XAI_API_KEY", "").strip()
+XAI_MODEL = os.getenv("XAI_MODEL", "grok-2-latest").strip()
+MULTI_MODEL_CHAT = (os.getenv("MULTI_MODEL_CHAT", "1").strip().lower() in ("1", "true", "yes", "on"))
 SITE_URL = os.getenv("SITE_URL", "https://example.com").strip()
 SITE_NAME = os.getenv("SITE_NAME", "Kavosh AI 2").strip()
+COPYRIGHT_OWNER = os.getenv("COPYRIGHT_OWNER", "Kavosh AI 2 — All rights reserved").strip()
+INSTANCE_ID = os.getenv("INSTANCE_ID", "").strip() or secrets.token_hex(4)
+
 WINDOW_SECONDS, MAX_REQUESTS = 60, 30
 LOGIN_WINDOW, LOGIN_MAX = 300, 8  # 8 login attempts / 5 min per IP
 SESSION_TTL = 8 * 60 * 60
@@ -190,6 +202,227 @@ def call_json_api(url: str, key: str, payload: dict, timeout=60, extra_headers=N
         return exc.code, data
     except (URLError, TimeoutError, OSError) as exc:
         raise RuntimeError("ارتباط با سرویس بیرونی برقرار نشد؛ اتصال و تنظیمات API را بررسی کن.") from exc
+
+
+def _extract_text_openai_style(data: dict) -> str:
+    try:
+        return (((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
+    except Exception:
+        return ""
+
+
+def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict:
+    """Call a single provider. Returns {name, ok, answer, error}."""
+    user_content = ""
+    for m in reversed(messages):
+        if m.get("role") == "user":
+            user_content = m.get("content") or ""
+            break
+    try:
+        if name == "openrouter" and API_KEY:
+            st, data = call_json_api(
+                "https://openrouter.ai/api/v1/chat/completions",
+                API_KEY,
+                {"model": MODEL, "messages": messages[-20:], "temperature": 0.4, "max_tokens": 1800},
+                timeout=timeout,
+                extra_headers={"HTTP-Referer": SITE_URL, "X-Title": SITE_NAME},
+            )
+            ans = _extract_text_openai_style(data)
+            if 200 <= st < 300 and ans:
+                return {"name": "OpenRouter", "ok": True, "answer": ans}
+            err = (data.get("error") or {}).get("message") if isinstance(data.get("error"), dict) else data.get("error")
+            return {"name": "OpenRouter", "ok": False, "answer": "", "error": str(err or st)[:200]}
+
+        if name == "openai" and OPENAI_API_KEY:
+            st, data = call_json_api(
+                "https://api.openai.com/v1/chat/completions",
+                OPENAI_API_KEY,
+                {"model": OPENAI_MODEL, "messages": messages[-20:], "temperature": 0.4, "max_tokens": 1800},
+                timeout=timeout,
+            )
+            ans = _extract_text_openai_style(data)
+            if 200 <= st < 300 and ans:
+                return {"name": "OpenAI", "ok": True, "answer": ans}
+            return {"name": "OpenAI", "ok": False, "answer": "", "error": str(st)}
+
+        if name == "claude" and ANTHROPIC_API_KEY:
+            # Anthropic messages API
+            sys = "\n".join(m["content"] for m in messages if m.get("role") == "system")
+            conv = [{"role": m["role"], "content": m["content"]} for m in messages if m.get("role") in ("user", "assistant")]
+            payload = {"model": ANTHROPIC_MODEL, "max_tokens": 1800, "messages": conv[-20:]}
+            if sys:
+                payload["system"] = sys[:8000]
+            headers = {
+                "x-api-key": ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json",
+            }
+            request = Request(
+                "https://api.anthropic.com/v1/messages",
+                data=json_bytes(payload),
+                headers=headers,
+                method="POST",
+            )
+            try:
+                with urlopen(request, timeout=timeout) as response:
+                    data = json.loads(response.read(2_000_000).decode("utf-8"))
+                    parts = data.get("content") or []
+                    ans = "".join(p.get("text", "") for p in parts if isinstance(p, dict)).strip()
+                    if ans:
+                        return {"name": "Claude", "ok": True, "answer": ans}
+            except HTTPError as exc:
+                return {"name": "Claude", "ok": False, "answer": "", "error": str(exc.code)}
+            return {"name": "Claude", "ok": False, "answer": "", "error": "empty"}
+
+        if name == "gemini" and GEMINI_API_KEY:
+            from urllib.parse import quote
+            url = (
+                "https://generativelanguage.googleapis.com/v1beta/models/"
+                + quote(GEMINI_MODEL)
+                + ":generateContent?key="
+                + quote(GEMINI_API_KEY)
+            )
+            # flatten last user message + short system
+            sys = " ".join(m["content"] for m in messages if m.get("role") == "system")[:2000]
+            prompt = (sys + "\n\n" if sys else "") + user_content
+            payload = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"maxOutputTokens": 1800}}
+            request = Request(url, data=json_bytes(payload), headers={"Content-Type": "application/json"}, method="POST")
+            try:
+                with urlopen(request, timeout=timeout) as response:
+                    data = json.loads(response.read(2_000_000).decode("utf-8"))
+                    cands = data.get("candidates") or []
+                    if cands:
+                        parts = ((cands[0].get("content") or {}).get("parts") or [])
+                        ans = "".join(p.get("text", "") for p in parts).strip()
+                        if ans:
+                            return {"name": "Gemini", "ok": True, "answer": ans}
+            except HTTPError as exc:
+                return {"name": "Gemini", "ok": False, "answer": "", "error": str(exc.code)}
+            return {"name": "Gemini", "ok": False, "answer": "", "error": "empty"}
+
+        if name == "grok" and XAI_API_KEY:
+            st, data = call_json_api(
+                "https://api.x.ai/v1/chat/completions",
+                XAI_API_KEY,
+                {"model": XAI_MODEL, "messages": messages[-20:], "temperature": 0.4, "max_tokens": 1800},
+                timeout=timeout,
+            )
+            ans = _extract_text_openai_style(data)
+            if 200 <= st < 300 and ans:
+                return {"name": "Grok", "ok": True, "answer": ans}
+            return {"name": "Grok", "ok": False, "answer": "", "error": str(st)}
+    except Exception as exc:
+        labels = {"openrouter": "OpenRouter", "openai": "OpenAI", "claude": "Claude", "gemini": "Gemini", "grok": "Grok"}
+        return {"name": labels.get(name, name), "ok": False, "answer": "", "error": str(exc)[:200]}
+    return {"name": name, "ok": False, "answer": "", "error": "پیکربندی نشده"}
+
+
+def run_multi_model_chat(messages: list) -> dict:
+    """Query all configured providers; return synthesis + per-model answers."""
+    order = ["openrouter", "openai", "claude", "gemini", "grok"]
+    results = []
+    # sequential to stay stdlib-simple and avoid rate storms; timeout per provider
+    for name in order:
+        r = call_one_chat_provider(name, messages, timeout=40)
+        # skip silent "not configured"
+        if r.get("error") == "پیکربندی نشده" and not r.get("ok"):
+            continue
+        results.append(r)
+
+    ok_list = [r for r in results if r.get("ok") and r.get("answer")]
+    if not ok_list:
+        return {"ok": False, "results": results, "answer": ""}
+
+    # Build Kavosh synthesis from all successful answers
+    lines = [
+        "پاسخ ترکیبی موتور کاوش (جمع‌بندی چند مدل):",
+        "",
+    ]
+    # Prefer longer overlapping ideas: take first 2-3 answers condensed
+    for r in ok_list:
+        snippet = re.sub(r"\s+", " ", r["answer"]).strip()
+        if len(snippet) > 700:
+            snippet = snippet[:700] + "…"
+        lines.append(f"• از نگاه {r['name']}:")
+        lines.append(snippet)
+        lines.append("")
+    lines.append("— جمع‌بندی کاوش: نکات مشترک مدل‌ها را جدی بگیرید؛ اگر مدل‌ها اختلاف دارند، موضوع را با منبع درسی/معتبر بررسی کنید.")
+    synthesis = "\n".join(lines).strip()
+    return {"ok": True, "results": results, "answer": synthesis, "models_ok": [r["name"] for r in ok_list]}
+
+
+def ensure_learn_tables(conn) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS learn_buffer (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            question TEXT NOT NULL,
+            synthesis TEXT NOT NULL,
+            sources TEXT,
+            created_at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS learn_meta (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        );
+        """
+    )
+
+
+def queue_learning(question: str, synthesis: str, sources: list) -> None:
+    with lock:
+        conn = db()
+        try:
+            ensure_learn_tables(conn)
+            conn.execute(
+                "INSERT INTO learn_buffer (question, synthesis, sources, created_at) VALUES (?,?,?,?)",
+                (question[:2000], synthesis[:12000], json.dumps(sources, ensure_ascii=False)[:2000], int(time.time())),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    maybe_flush_learning()
+
+
+def maybe_flush_learning(force: bool = False) -> dict:
+    """Every 24h, merge buffered Q&A into knowledge base as a daily document."""
+    with lock:
+        conn = db()
+        try:
+            ensure_learn_tables(conn)
+            row = conn.execute("SELECT value FROM learn_meta WHERE key='last_flush'").fetchone()
+            last = int(row["value"]) if row and str(row["value"]).isdigit() else 0
+            now = int(time.time())
+            if not force and last and (now - last) < 24 * 3600:
+                return {"ok": True, "flushed": False, "reason": "not_yet"}
+            rows = conn.execute(
+                "SELECT question, synthesis, sources, created_at FROM learn_buffer ORDER BY id ASC LIMIT 200"
+            ).fetchall()
+            if not rows:
+                conn.execute(
+                    "INSERT INTO learn_meta(key,value) VALUES('last_flush',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                    (str(now),),
+                )
+                conn.commit()
+                return {"ok": True, "flushed": False, "reason": "empty"}
+            parts = []
+            for r in rows:
+                parts.append(f"سؤال: {r['question']}\nپاسخ آموخته: {r['synthesis'][:3000]}\n")
+            content = "\n---\n".join(parts)
+            title = time.strftime("یادگیری روزانه کاوش %Y-%m-%d", time.localtime(now))
+            ensure_knowledge_tables(conn)
+            ensure_learn_tables(conn)
+            ingest_document(conn, title=title, content=content, source="کاوش/یادگیری-چندمدلی", lang="fa")
+            conn.execute("DELETE FROM learn_buffer")
+            conn.execute(
+                "INSERT INTO learn_meta(key,value) VALUES('last_flush',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (str(now),),
+            )
+            conn.commit()
+            return {"ok": True, "flushed": True, "count": len(rows)}
+        finally:
+            conn.close()
+
 
 def media_config(kind):
     """Read media credentials ONLY from process environment / .env — never from client body or DB."""
@@ -1280,6 +1513,12 @@ def public_provider_status() -> dict:
             "endpoint": "https://openrouter.ai/api/v1/chat/completions",
             "model": MODEL or "(empty)",
             "keyConfigured": bool(API_KEY),
+                "multiModel": MULTI_MODEL_CHAT,
+                "providersConfigured": {
+                    "openrouter": bool(API_KEY), "openai": bool(OPENAI_API_KEY),
+                    "claude": bool(ANTHROPIC_API_KEY), "gemini": bool(GEMINI_API_KEY),
+                    "grok": bool(XAI_API_KEY)
+                },
             "note": "کلید فقط روی سرور است و به مرورگر فرستاده نمی‌شود.",
         },
         "image": {
@@ -1376,7 +1615,18 @@ def save_uploaded_video(vid: str, data: bytes, filename: str = "") -> str:
     return f"/media/videos/{sid}{ext}"
 
 
+
+def brand_answer(text: str) -> str:
+    """Append lightweight ownership notice (does not stop cloning; marks origin)."""
+    t = (text or "").rstrip()
+    notice = f"\n\n— {SITE_NAME} · {COPYRIGHT_OWNER}"
+    if notice.strip() in t:
+        return t
+    return t + notice
+
+
 class Handler(BaseHTTPRequestHandler):
+
     server_version = "KavoshAI2-Python"
     def log_message(self, fmt, *args):
         print("%s - %s" % (self.client_address[0], fmt % args))
@@ -1386,6 +1636,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Kavosh-Product", "Kavosh-AI-2")
+        self.send_header("X-Kavosh-Instance", INSTANCE_ID)
+        self.send_header("X-Kavosh-Copyright", COPYRIGHT_OWNER[:120])
         security_headers(self, for_html=False)
         secure = is_https_request(self)
         if set_cookies:
@@ -1483,7 +1736,7 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/health":
             return self.send_json(200, {
-                "ok": True, "name": SITE_NAME, "version": "2.1.0", "provider": "openrouter", "runtime": "python",
+                "ok": True, "name": SITE_NAME, "version": "2.1.0", "copyright": COPYRIGHT_OWNER, "instance": INSTANCE_ID, "provider": "openrouter", "runtime": "python",
                 "keyConfigured": bool(API_KEY), "imageConfigured": True, "imageProvider": ("api" if all(media_config("تصویر")) else "pollinations-or-local"),
                 "videoConfigured": True, "videoProvider": ("api" if all(media_config("ویدئو")) else "public-or-preview"), "ownerConfigured": configured_owner(),
             "managerConfigured": configured_managers() > 0,
@@ -2292,7 +2545,7 @@ class Handler(BaseHTTPRequestHandler):
                         search_results = web_search(message, limit=5)
                     except RuntimeError as exc:
                         search_error = str(exc)[:300]
-                if not API_KEY:
+                if not API_KEY and not (OPENAI_API_KEY or ANTHROPIC_API_KEY or GEMINI_API_KEY or XAI_API_KEY):
                     if want_search and search_results:
                         summary = summarize_web_results(message, search_results)
                         return self.send_json(200, {
@@ -2360,6 +2613,36 @@ class Handler(BaseHTTPRequestHandler):
                     if isinstance(item, dict) and item.get("role") in ("user", "assistant") and isinstance(item.get("content"), str):
                         messages.append({"role": item["role"], "content": item["content"][:8000]})
                 messages.append({"role": "user", "content": message})
+                # Multi-model path: OpenRouter + OpenAI + Claude + Gemini + Grok (هر کدام که کلید دارد)
+                if MULTI_MODEL_CHAT:
+                    multi = run_multi_model_chat(messages)
+                    if multi.get("ok") and multi.get("answer"):
+                        try:
+                            queue_learning(
+                                message,
+                                multi["answer"],
+                                multi.get("models_ok") or [],
+                            )
+                        except Exception:
+                            pass
+                        out = {
+                            "ok": True,
+                            "answer": multi["answer"],
+                            "provider": "kavosh-multi",
+                            "models": multi.get("models_ok") or [],
+                            "modelDetails": [
+                                {"name": r.get("name"), "ok": r.get("ok"), "error": r.get("error")}
+                                for r in (multi.get("results") or [])
+                            ],
+                        }
+                        if search_results:
+                            out["searchResults"] = search_results
+                        return self.send_json(200, out)
+                    # multi failed entirely → always_answer
+                    ans = always_answer(message)
+                    ans["note"] = "هیچ‌یک از مدل‌های پیکربندی‌شده پاسخ ندادند؛ موتور کاوش جایگزین شد."
+                    return self.send_json(200, ans)
+
                 status, data = call_json_api(
                     "https://openrouter.ai/api/v1/chat/completions", API_KEY,
                     {"model": MODEL, "messages": messages[-26:], "temperature": 0.45, "max_tokens": 3000},
@@ -2367,20 +2650,6 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 if status < 200 or status >= 300:
                     err = (data.get("error") or {}).get("message") if isinstance(data.get("error"), dict) else data.get("error")
-                    with lock:
-                        conn = db()
-                        try:
-                            kb = answer_from_knowledge(conn, message, limit=6)
-                        finally:
-                            conn.close()
-                    if kb.get("ok") and kb.get("answer"):
-                        return self.send_json(200, {
-                            "ok": True,
-                            "answer": kb["answer"],
-                            "provider": kb.get("provider") or "kavosh-knowledge",
-                            "note": f"سرویس AI خطا/محدودیت ({status})؛ موتور کاوش فعال شد.",
-                            "upstreamError": str(err or status)[:300],
-                        })
                     ans = always_answer(message)
                     ans["note"] = f"سرویس AI خطا/محدودیت ({status})؛ پاسخ جایگزین کاوش."
                     ans["upstreamError"] = str(err or status)[:300]
@@ -2390,6 +2659,10 @@ class Handler(BaseHTTPRequestHandler):
                     ans = always_answer(message)
                     ans["note"] = "پاسخ مدل خالی بود؛ موتور کاوش جایگزین شد."
                     return self.send_json(200, ans)
+                try:
+                    queue_learning(message, answer.strip(), ["OpenRouter"])
+                except Exception:
+                    pass
                 out = {"ok": True, "answer": answer.strip(), "provider": "openrouter"}
                 if search_results:
                     out["searchResults"] = search_results
