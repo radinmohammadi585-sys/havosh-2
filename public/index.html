@@ -144,20 +144,20 @@ background:linear-gradient(135deg,#6b8cff,#9b7dff);border:none;color:#fff;font-s
         <h1 data-i18n="brand">کاوش AI 2</h1>
         <p data-i18n="tagline">دستیار هوشمند فضایی</p>
       </div>
-    </div>
+    <div id="uiVersion" style="font-size:11px;color:#5eead4;margin-top:6px;font-weight:700">نسخه UI: 2026-10-25-C · کاوش‌ویدیو+اخبار</div></div>
     <div class="nav" id="nav">
       <div class="nav-label" data-i18n="nav_main">اصلی</div>
       <button data-page="home" class="active"><span class="icon">⌂</span><span data-i18n="nav_home">خانه</span></button>
       <button data-page="chat"><span class="icon">💬</span><span data-i18n="nav_chat">چت هوش مصنوعی</span></button>
       <button data-page="image"><span class="icon">🖼</span><span data-i18n="nav_image">استودیو تصویر</span></button>
       <button data-page="video"><span class="icon">🎬</span><span data-i18n="nav_video">استودیو ویدئو</span></button>
+      <button data-page="channel" style="border:1px solid rgba(94,234,212,.45)"><span class="icon">📺</span><span>کاوش ویدیو</span></button>
+      <button data-page="news" style="border:1px solid rgba(94,234,212,.45)"><span class="icon">📰</span><span>اخبار کاوش</span></button>
       <div class="nav-label" data-i18n="nav_services">خدمات</div>
       <button data-page="tickets"><span class="icon">🎫</span><span data-i18n="nav_tickets">تیکت پشتیبانی</span></button>
       <button data-page="voice"><span class="icon">🎙</span><span>صوتی</span></button>
       <button data-page="support"><span class="icon">💬</span><span>پشتیبانی</span></button>
       <button data-page="knowledge"><span class="icon">📚</span><span>دانش</span></button>
-      <button data-page="news"><span class="icon">📰</span><span>اخبار کاوش</span></button>
-      <button data-page="channel"><span class="icon">📺</span><span>کاوش ویدیو</span></button>
       <button data-page="contests"><span class="icon">🏆</span><span data-i18n="nav_contests">مسابقات</span></button>
       <button data-page="subs"><span class="icon">💎</span><span data-i18n="nav_subs">اشتراک‌ها</span></button>
       <button data-page="notifs"><span class="icon">🔔</span><span data-i18n="nav_notifs">اعلان‌ها</span></button>
@@ -447,14 +447,16 @@ background:linear-gradient(135deg,#6b8cff,#9b7dff);border:none;color:#fff;font-s
 
     <section class="page" id="page-channel">
       <h2 style="margin-top:0">کاوش ویدیو</h2>
-      <p class="alert">کانال ویدئویی شبیه آپارات/یوتیوب — پخش از لینک مستقیم یا آپارات/یوتیوب. آپلود فایل حجیم روی سرور انجام نمی‌شود؛ لینک ویدئو ثبت می‌شود.</p>
+      <p class="alert">کاوش ویدیو — اشتراک‌گذاری مثل آپارات: می‌توانید فایل mp4/webm آپلود کنید یا لینک خارجی بگذارید. حداکثر حجم آپلود: ۲۵ مگابایت.</p>
       <div id="videoStaff" style="display:none" class="card">
-        <h3>افزودن ویدئو (کارکنان)</h3>
+        <h3>آپلود / ثبت ویدئو (کاربران واردشده)</h3>
         <div class="form-grid">
           <label>عنوان <input type="text" id="vidTitle"></label>
-          <label>لینک ویدئو (mp4 / آپارات / یوتیوب) <input type="url" id="vidUrl" placeholder="https://..."></label>
           <label>توضیحات <textarea id="vidDesc" rows="3"></textarea></label>
-          <button class="btn btn-primary" type="button" id="vidPostBtn">ثبت در کانال</button>
+          <label>آپلود فایل (mp4 یا webm) <input type="file" id="vidFile" accept="video/mp4,video/webm,.mp4,.webm"></label>
+          <label>یا لینک خارجی (اختیاری اگر فایل می‌فرستید) <input type="url" id="vidUrl" placeholder="https://..."></label>
+          <button class="btn btn-primary" type="button" id="vidUploadBtn">آپلود به کاوش ویدیو</button>
+          <button class="btn btn-ghost" type="button" id="vidPostBtn">فقط ثبت لینک</button>
           <div id="vidChanMsg"></div>
         </div>
       </div>
@@ -1480,7 +1482,15 @@ $('voiceSendChat') && $('voiceSendChat').addEventListener('click', () => {
   const t=(($('voiceTranscript')&&$('voiceTranscript').value)||'').trim();
   if(!t) return; showPage('chat'); $('chatInput').value=t; sendChat();
 });
-if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js').catch(()=>{}); }
+
+/* force drop old SW caches that blocked UI updates */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()));
+  if (window.caches) {
+    caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+  }
+}
+
 
 
 function isStaffUser(){
@@ -1504,13 +1514,13 @@ async function loadChannel(){
   const box = $('channelList');
   if (!box) return;
   const staff = $('videoStaff');
-  if (staff) staff.style.display = isStaffUser() ? '' : 'none';
+  if (staff) staff.style.display = user ? '' : 'none';
   const {data} = await api('/api/videos');
   if (!data.ok || !(data.videos||[]).length) { box.innerHTML = '<div class="empty">ویدئویی نیست</div>'; return; }
   box.innerHTML = data.videos.map(v => {
     let player = '';
     const u = v.url || '';
-    if (/\.(mp4|webm)(\?|$)/i.test(u)) {
+    if (/\.(mp4|webm)(\?|$)/i.test(u) || u.startsWith('/media/videos/')) {
       player = `<video src="${escapeHtml(u)}" controls playsinline style="width:100%;max-height:360px;border-radius:12px;background:#000"></video>`;
     } else {
       player = `<a class="btn btn-primary" href="${escapeHtml(u)}" target="_blank" rel="noopener">تماشا در منبع</a>`;
@@ -1525,6 +1535,45 @@ $('newsPostBtn') && $('newsPostBtn').addEventListener('click', async () => {
   $('newsMsg').innerHTML = data.ok ? '<div class="alert ok">منتشر شد</div>' : `<div class="alert err">${escapeHtml(data.error||'خطا')}</div>`;
   if (data.ok) { $('newsTitle').value=''; $('newsBody').value=''; loadNews(); }
 });
+
+$('vidUploadBtn') && $('vidUploadBtn').addEventListener('click', async () => {
+  if (!token && !user) { alert('ابتدا وارد شوید'); showPage('profile'); return; }
+  const fileInput = $('vidFile');
+  const file = fileInput && fileInput.files && fileInput.files[0];
+  if (!file) { $('vidChanMsg').innerHTML = '<div class="alert err">یک فایل mp4 یا webm انتخاب کنید</div>'; return; }
+  if (file.size > 25 * 1024 * 1024) { $('vidChanMsg').innerHTML = '<div class="alert err">حداکثر ۲۵ مگابایت</div>'; return; }
+  const title = ($('vidTitle').value || '').trim();
+  if (!title) { $('vidChanMsg').innerHTML = '<div class="alert err">عنوان لازم است</div>'; return; }
+  $('vidChanMsg').innerHTML = '<div class="alert loading">در حال آپلود…</div>';
+  const reader = new FileReader();
+  reader.onload = async () => {
+    let csrf = '';
+    try {
+      const c = await api('/api/admin/csrf');
+      csrf = (c.data && c.data.csrf) || '';
+    } catch (e) {}
+    const {data} = await api('/api/videos/upload', {
+      method: 'POST',
+      body: JSON.stringify({
+        title,
+        description: ($('vidDesc').value || ''),
+        filename: file.name,
+        data: reader.result,
+        csrf
+      })
+    });
+    if (data.ok) {
+      $('vidChanMsg').innerHTML = '<div class="alert ok">آپلود شد: ' + escapeHtml(data.id || '') + '</div>';
+      if (fileInput) fileInput.value = '';
+      loadChannel();
+    } else {
+      $('vidChanMsg').innerHTML = '<div class="alert err">' + escapeHtml(data.error || 'خطا') + '</div>';
+    }
+  };
+  reader.onerror = () => { $('vidChanMsg').innerHTML = '<div class="alert err">خواندن فایل ناموفق</div>'; };
+  reader.readAsDataURL(file);
+});
+
 $('vidPostBtn') && $('vidPostBtn').addEventListener('click', async () => {
   const {data} = await api('/api/videos', {method:'POST', body: JSON.stringify({title:$('vidTitle').value, url:$('vidUrl').value, description:$('vidDesc').value})});
   $('vidChanMsg').innerHTML = data.ok ? '<div class="alert ok">ثبت شد</div>' : `<div class="alert err">${escapeHtml(data.error||'خطا')}</div>`;
