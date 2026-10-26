@@ -56,7 +56,7 @@ XAI_MODEL = os.getenv("XAI_MODEL", "grok-2-latest").strip()
 MULTI_MODEL_CHAT = (os.getenv("MULTI_MODEL_CHAT", "1").strip().lower() in ("1", "true", "yes", "on"))
 SITE_URL = os.getenv("SITE_URL", "https://example.com").strip()
 SITE_NAME = os.getenv("SITE_NAME", "Kavosh AI 2").strip()
-COPYRIGHT_OWNER = os.getenv("COPYRIGHT_OWNER", "Kavosh AI 2 — All rights reserved").strip()
+COPYRIGHT_OWNER = os.getenv("COPYRIGHT_OWNER", "Kavosh AI 2 - All rights reserved").strip()
 INSTANCE_ID = os.getenv("INSTANCE_ID", "").strip() or secrets.token_hex(4)
 
 WINDOW_SECONDS, MAX_REQUESTS = 60, 30
@@ -1561,7 +1561,17 @@ def public_provider_status() -> dict:
 
 
 
+def header_ascii(value: str, max_len: int = 120) -> str:
+    """HTTP headers must be latin-1; strip non-ascii (e.g. Persian or em-dash)."""
+    s = str(value or "")
+    s = s.replace("\u2014", "-").replace("—", "-").replace("–", "-")
+    s = "".join(ch if ord(ch) < 128 else "-" for ch in s)
+    s = " ".join(s.split())
+    return s[:max_len] or "Kavosh-AI-2"
+
+
 def security_headers(handler, for_html=False):
+
     handler.send_header("X-Content-Type-Options", "nosniff")
     handler.send_header("X-Frame-Options", "DENY")
     handler.send_header("Referrer-Policy", "no-referrer")
@@ -1637,8 +1647,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Kavosh-Product", "Kavosh-AI-2")
-        self.send_header("X-Kavosh-Instance", INSTANCE_ID)
-        self.send_header("X-Kavosh-Copyright", COPYRIGHT_OWNER[:120])
+        self.send_header("X-Kavosh-Instance", header_ascii(INSTANCE_ID, 64))
+        self.send_header("X-Kavosh-Copyright", header_ascii(COPYRIGHT_OWNER, 120))
         security_headers(self, for_html=False)
         secure = is_https_request(self)
         if set_cookies:
