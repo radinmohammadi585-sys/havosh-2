@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#050814">
 <title>کاوش AI 2 | Kavosh AI 2</title>
+<meta name="copyright" content="Kavosh AI 2">
+<meta name="author" content="Kavosh AI 2">
   <meta name="theme-color" content="#0b1020">
   <link rel="manifest" href="/manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1587,6 +1589,27 @@ renderConvList();
 refreshHealth();
 refreshMe();
 setInterval(refreshHealth, 60000);
+})();
+</script>
+
+<div id="kavosh-copyright-footer" style="position:fixed;bottom:8px;left:50%;transform:translateX(-50%);z-index:30;font-size:10px;color:var(--muted);opacity:.85;pointer-events:none;text-align:center;max-width:90%">
+  © کاوش AI 2 — استفادهٔ تجاری یا انتشار مجدد بدون مجوز صاحب اثر ممنوع است.
+</div>
+<script id="kavosh-protect-soft">
+(() => {
+  // Soft deterrents only — cannot stop a determined copy of public HTML/API.
+  const notice = () => alert('محتوای کاوش AI 2 دارای حقوق محفوظ است. کپی یا انتشار بدون مجوز مجاز نیست.');
+  document.addEventListener('contextmenu', (e) => {
+    if (e.target && (e.target.closest('.messages') || e.target.closest('#page-channel') || e.target.closest('#page-news'))) {
+      e.preventDefault(); notice();
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'u') {
+      // cannot fully block view-source; show notice
+      notice();
+    }
+  });
 })();
 </script>
 </body>
