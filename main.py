@@ -64,6 +64,16 @@ XAI_MODEL = os.getenv("XAI_MODEL", "grok-2-latest").strip()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile").strip()
 MULTI_MODEL_CHAT = (os.getenv("MULTI_MODEL_CHAT", "1").strip().lower() in ("1", "true", "yes", "on"))
+# Outbound proxy for LLM APIs (region blocks). Examples:
+# PROXY_URL=socks5://127.0.0.1:1080   or  http://127.0.0.1:7890
+# Also accepts HTTPS_PROXY / HTTP_PROXY / ALL_PROXY standard env names.
+PROXY_URL = (
+    os.getenv("PROXY_URL", "").strip()
+    or os.getenv("HTTPS_PROXY", "").strip()
+    or os.getenv("HTTP_PROXY", "").strip()
+    or os.getenv("ALL_PROXY", "").strip()
+)
+PROXY_CONFIG = {"http": PROXY_URL, "https": PROXY_URL} if PROXY_URL else {}
 SITE_URL = os.getenv("SITE_URL", "https://example.com").strip()
 SITE_NAME = os.getenv("SITE_NAME", "Kavosh AI 2").strip()
 PAYMENT_CARD_NUMBER = os.getenv("PAYMENT_CARD_NUMBER", "5022291615275201").strip().replace(" ", "")
@@ -200,12 +210,52 @@ def solve_math(text: str):
 
 
 
+
+def _build_urlopen():
+    """urlopen that respects PROXY_URL when set (HTTP/HTTPS proxy; SOCKS if PySocks installed)."""
+    from urllib.request import build_opener, ProxyHandler, urlopen as _urlopen
+    if not PROXY_URL:
+        return _urlopen
+    proxy = PROXY_URL
+    # Prefer stdlib ProxyHandler for http/https proxies
+    if proxy.startswith("socks5://") or proxy.startswith("socks4://") or proxy.startswith("socks5h://"):
+        try:
+            import socks  # type: ignore  # PySocks optional
+            from urllib.request import build_opener
+            # Install global default via monkeypatch of socket if needed — prefer opener with SocksHandler if available
+            try:
+                from sockshandler import SocksiPyHandler  # type: ignore
+                kind = socks.SOCKS5 if "socks5" in proxy else socks.SOCKS4
+                # parse host:port
+                rest = proxy.split("://", 1)[1]
+                hostport = rest.split("@")[-1]
+                host, _, port = hostport.partition(":")
+                port = int(port or 1080)
+                opener = build_opener(SocksiPyHandler(kind, host, port))
+                return opener.open
+            except Exception:
+                pass
+        except Exception:
+            pass
+        # fallback: try as http proxy URL rewrite won't work for socks without PySocks
+        print("WARNING: SOCKS proxy set but PySocks/SocksiPyHandler not available; install PySocks or use HTTP proxy")
+        return _urlopen
+    handlers = ProxyHandler({"http": proxy, "https": proxy})
+    opener = build_opener(handlers)
+    return opener.open
+
+
+def urlopen_proxied(request, timeout=60):
+    opener = _build_urlopen()
+    return opener(request, timeout=timeout)
+
+
 def call_json_api(url: str, key: str, payload: dict, timeout=60, extra_headers=None):
     headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
     headers.update(extra_headers or {})
     request = Request(url, data=json_bytes(payload), headers=headers, method="POST")
     try:
-        with urlopen(request, timeout=timeout) as response:
+        with urlopen_proxied(request, timeout=timeout) as response:
             raw = response.read(2_000_000)
             return response.status, json.loads(raw.decode("utf-8"))
     except HTTPError as exc:
@@ -288,7 +338,7 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
                 method="POST",
             )
             try:
-                with urlopen(request, timeout=timeout) as response:
+                with urlopen_proxied(request, timeout=timeout) as response:
                     data = json.loads(response.read(2_000_000).decode("utf-8"))
                     parts = data.get("content") or []
                     ans = "".join(p.get("text", "") for p in parts if isinstance(p, dict)).strip()
@@ -312,7 +362,7 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
             payload = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"maxOutputTokens": 1800}}
             request = Request(url, data=json_bytes(payload), headers={"Content-Type": "application/json"}, method="POST")
             try:
-                with urlopen(request, timeout=timeout) as response:
+                with urlopen_proxied(request, timeout=timeout) as response:
                     data = json.loads(response.read(2_000_000).decode("utf-8"))
                     cands = data.get("candidates") or []
                     if cands:
@@ -584,7 +634,7 @@ def _github_append_engine_file(new_text: str) -> str:
     }
     old_text, sha = "", None
     try:
-        with urlopen(Request(f"{api}?ref={quote(GITHUB_BRANCH)}", headers=headers, method="GET"), timeout=20) as resp:
+        with urlopen_proxied(Request(f"{api}?ref={quote(GITHUB_BRANCH)}", headers=headers, method="GET"), timeout=20) as resp:
             meta = json.loads(resp.read(5_000_000).decode("utf-8"))
             sha = meta.get("sha")
             old_text = base64.b64decode(meta.get("content", "") or "").decode("utf-8", errors="replace")
@@ -605,7 +655,7 @@ def _github_append_engine_file(new_text: str) -> str:
         payload["sha"] = sha
     try:
         req = Request(api, data=json_bytes(payload), headers=headers, method="PUT")
-        with urlopen(req, timeout=30):
+        with urlopen_proxied(req, timeout=30):
             return ""
     except HTTPError as exc:
         return f"github put {exc.code}"
@@ -894,7 +944,7 @@ def generate_image_without_user_key(prompt: str) -> dict:
             headers={"User-Agent": "KavoshAI2/2.2", "Accept": "image/*,*/*"},
             method="GET",
         )
-        with urlopen(req, timeout=120) as resp:
+        with urlopen_proxied(req, timeout=120) as resp:
             data = resp.read(8_000_000)
             ctype = (resp.headers.get("Content-Type") or "image/jpeg").split(";")[0].strip()
         if len(data) < 800 or not ctype.startswith("image/"):
@@ -966,7 +1016,7 @@ def generate_video_without_user_key(prompt: str) -> dict:
             headers={"User-Agent": "KavoshAI2/2.2", "Accept": "video/*,*/*"},
             method="GET",
         )
-        with urlopen(req, timeout=180) as resp:
+        with urlopen_proxied(req, timeout=180) as resp:
             data = resp.read(20_000_000)
             ctype = (resp.headers.get("Content-Type") or "").split(";")[0].strip()
         if data and len(data) > 2000 and ("video" in ctype or data[:4] == b"\x00\x00\x00"):
@@ -1124,7 +1174,7 @@ def web_search(query: str, limit: int = 5) -> list[dict]:
     try:
         ia = "https://api.duckduckgo.com/?q=" + quote_plus(q) + "&format=json&no_html=1&skip_disambig=1"
         req = Request(ia, headers={"User-Agent": ua, "Accept": "application/json"}, method="GET")
-        with urlopen(req, timeout=12) as resp:
+        with urlopen_proxied(req, timeout=12) as resp:
             raw = resp.read(300_000).decode("utf-8", errors="replace").strip()
             if raw:
                 data = json.loads(raw)
@@ -1151,7 +1201,7 @@ def web_search(query: str, limit: int = 5) -> list[dict]:
                 + "&limit=5&namespace=0&format=json"
             )
             req = Request(api, headers={"User-Agent": ua, "Accept": "application/json"}, method="GET")
-            with urlopen(req, timeout=12) as resp:
+            with urlopen_proxied(req, timeout=12) as resp:
                 data = json.loads(resp.read(300_000).decode("utf-8", errors="replace"))
             if isinstance(data, list) and len(data) >= 4:
                 titles, descs, urls = data[1], data[2], data[3]
@@ -1170,7 +1220,7 @@ def web_search(query: str, limit: int = 5) -> list[dict]:
         try:
             url = "https://html.duckduckgo.com/html/?q=" + quote_plus(q)
             req = Request(url, headers={"User-Agent": ua, "Accept": "text/html"}, method="GET")
-            with urlopen(req, timeout=15) as resp:
+            with urlopen_proxied(req, timeout=15) as resp:
                 html = resp.read(500_000).decode("utf-8", errors="replace")
             for m in re.finditer(
                 r'class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', html, re.I | re.S
@@ -1260,7 +1310,7 @@ def summarize_web_results(query: str, results: list) -> str:
             lang = "fa" if p.netloc.startswith("fa.") else ("en" if p.netloc.startswith("en.") else "fa")
             api = f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/{quote(title)}"
             req = Request(api, headers={"User-Agent": ua, "Accept": "application/json"}, method="GET")
-            with urlopen(req, timeout=10) as resp:
+            with urlopen_proxied(req, timeout=10) as resp:
                 data = json.loads(resp.read(200_000).decode("utf-8", errors="replace"))
             extract = (data.get("extract") or "").strip()
             return extract[:800]
@@ -1335,14 +1385,14 @@ def wiki_direct_summary(query: str) -> str:
                 + quote_plus(q) + "&limit=1&namespace=0&format=json"
             )
             req = Request(api, headers={"User-Agent": ua, "Accept": "application/json"}, method="GET")
-            with urlopen(req, timeout=10) as resp:
+            with urlopen_proxied(req, timeout=10) as resp:
                 data = json.loads(resp.read(150_000).decode("utf-8", errors="replace"))
             if not (isinstance(data, list) and len(data) > 1 and data[1]):
                 continue
             title = data[1][0]
             sum_url = f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/{quote(title)}"
             req2 = Request(sum_url, headers={"User-Agent": ua, "Accept": "application/json"}, method="GET")
-            with urlopen(req2, timeout=10) as resp2:
+            with urlopen_proxied(req2, timeout=10) as resp2:
                 js = json.loads(resp2.read(200_000).decode("utf-8", errors="replace"))
             extract = (js.get("extract") or "").strip()
             if extract and len(extract) > 40:
@@ -1762,7 +1812,7 @@ def public_provider_status() -> dict:
             "provider": "openrouter",
             "endpoint": "https://openrouter.ai/api/v1/chat/completions",
             "model": MODEL or "(empty)",
-            "keyConfigured": bool(API_KEY),
+            "keyConfigured": bool(API_KEY), "proxyConfigured": bool(PROXY_URL),
                 "multiModel": MULTI_MODEL_CHAT,
                 "providersConfigured": {
                     "openrouter": bool(API_KEY), "openai": bool(OPENAI_API_KEY),
@@ -3175,6 +3225,10 @@ def main():
     print(f"Kavosh engine learning every {LEARN_INTERVAL}s -> {ENGINE_FILE}" + (f" + GitHub {GITHUB_REPO}@{GITHUB_BRANCH}" if GITHUB_TOKEN and GITHUB_REPO else ""))
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     print(f"{SITE_NAME} server listening on port {PORT}")
+    if PROXY_URL:
+        print(f"Outbound proxy: {PROXY_URL.split('@')[-1] if '@' in PROXY_URL else PROXY_URL}")
+    else:
+        print("Outbound proxy: off")
     print(f"DB: {DB_PATH}")
     server.serve_forever()
 
