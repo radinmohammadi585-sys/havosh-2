@@ -224,11 +224,11 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
             user_content = m.get("content") or ""
             break
     try:
-        if name == "openrouter" and API_KEY:
+        if name == "openrouter" and secret_get_chat("openrouter_key", "OPENROUTER_API_KEY"):
             st, data = call_json_api(
                 "https://openrouter.ai/api/v1/chat/completions",
-                API_KEY,
-                {"model": MODEL, "messages": messages[-20:], "temperature": 0.4, "max_tokens": 1800},
+                secret_get_chat("openrouter_key", "OPENROUTER_API_KEY"),
+                {"model": secret_get_chat("openrouter_model", "OPENROUTER_MODEL") or MODEL, "messages": messages[-20:], "temperature": 0.4, "max_tokens": 1800},
                 timeout=timeout,
                 extra_headers={"HTTP-Referer": SITE_URL, "X-Title": SITE_NAME},
             )
@@ -238,11 +238,11 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
             err = (data.get("error") or {}).get("message") if isinstance(data.get("error"), dict) else data.get("error")
             return {"name": "OpenRouter", "ok": False, "answer": "", "error": str(err or st)[:200]}
 
-        if name == "openai" and OPENAI_API_KEY:
+        if name == "openai" and secret_get_chat("openai_key", "OPENAI_API_KEY"):
             st, data = call_json_api(
                 "https://api.openai.com/v1/chat/completions",
-                OPENAI_API_KEY,
-                {"model": OPENAI_MODEL, "messages": messages[-20:], "temperature": 0.4, "max_tokens": 1800},
+                secret_get_chat("openai_key", "OPENAI_API_KEY"),
+                {"model": secret_get_chat("openai_model", "OPENAI_MODEL") or OPENAI_MODEL, "messages": messages[-20:], "temperature": 0.4, "max_tokens": 1800},
                 timeout=timeout,
             )
             ans = _extract_text_openai_style(data)
@@ -250,15 +250,15 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
                 return {"name": "OpenAI", "ok": True, "answer": ans}
             return {"name": "OpenAI", "ok": False, "answer": "", "error": str(st)}
 
-        if name == "claude" and ANTHROPIC_API_KEY:
+        if name == "claude" and secret_get_chat("anthropic_key", "ANTHROPIC_API_KEY"):
             # Anthropic messages API
             sys = "\n".join(m["content"] for m in messages if m.get("role") == "system")
             conv = [{"role": m["role"], "content": m["content"]} for m in messages if m.get("role") in ("user", "assistant")]
-            payload = {"model": ANTHROPIC_MODEL, "max_tokens": 1800, "messages": conv[-20:]}
+            payload = {"model": secret_get_chat("anthropic_model", "ANTHROPIC_MODEL") or ANTHROPIC_MODEL, "max_tokens": 1800, "messages": conv[-20:]}
             if sys:
                 payload["system"] = sys[:8000]
             headers = {
-                "x-api-key": ANTHROPIC_API_KEY,
+                "x-api-key": secret_get_chat("anthropic_key", "ANTHROPIC_API_KEY"),
                 "anthropic-version": "2023-06-01",
                 "Content-Type": "application/json",
             }
@@ -279,13 +279,13 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
                 return {"name": "Claude", "ok": False, "answer": "", "error": str(exc.code)}
             return {"name": "Claude", "ok": False, "answer": "", "error": "empty"}
 
-        if name == "gemini" and GEMINI_API_KEY:
+        if name == "gemini" and secret_get_chat("gemini_key", "GEMINI_API_KEY"):
             from urllib.parse import quote
             url = (
                 "https://generativelanguage.googleapis.com/v1beta/models/"
-                + quote(GEMINI_MODEL)
+                + quote(secret_get_chat("gemini_model", "GEMINI_MODEL") or GEMINI_MODEL)
                 + ":generateContent?key="
-                + quote(GEMINI_API_KEY)
+                + quote(secret_get_chat("gemini_key", "GEMINI_API_KEY"))
             )
             # flatten last user message + short system
             sys = " ".join(m["content"] for m in messages if m.get("role") == "system")[:2000]
@@ -305,11 +305,11 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
                 return {"name": "Gemini", "ok": False, "answer": "", "error": str(exc.code)}
             return {"name": "Gemini", "ok": False, "answer": "", "error": "empty"}
 
-        if name == "grok" and XAI_API_KEY:
+        if name == "grok" and secret_get_chat("xai_key", "XAI_API_KEY"):
             st, data = call_json_api(
                 "https://api.x.ai/v1/chat/completions",
-                XAI_API_KEY,
-                {"model": XAI_MODEL, "messages": messages[-20:], "temperature": 0.4, "max_tokens": 1800},
+                secret_get_chat("xai_key", "XAI_API_KEY"),
+                {"model": secret_get_chat("xai_model", "XAI_MODEL") or XAI_MODEL, "messages": messages[-20:], "temperature": 0.4, "max_tokens": 1800},
                 timeout=timeout,
             )
             ans = _extract_text_openai_style(data)
@@ -317,11 +317,11 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
                 return {"name": "Grok", "ok": True, "answer": ans}
             return {"name": "Grok", "ok": False, "answer": "", "error": str(st)}
 
-        if name == "groq" and GROQ_API_KEY:
+        if name == "groq" and secret_get_chat("groq_key", "GROQ_API_KEY"):
             st, data = call_json_api(
                 "https://api.groq.com/openai/v1/chat/completions",
-                GROQ_API_KEY,
-                {"model": GROQ_MODEL, "messages": messages[-20:], "temperature": 0.4, "max_tokens": 1800},
+                secret_get_chat("groq_key", "GROQ_API_KEY"),
+                {"model": secret_get_chat("groq_model", "GROQ_MODEL") or GROQ_MODEL, "messages": messages[-20:], "temperature": 0.4, "max_tokens": 1800},
                 timeout=timeout,
             )
             ans = _extract_text_openai_style(data)
@@ -332,12 +332,33 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
     except Exception as exc:
         labels = {"openrouter": "OpenRouter", "openai": "OpenAI", "claude": "Claude", "gemini": "Gemini", "grok": "Grok", "groq": "Groq"}
         return {"name": labels.get(name, name), "ok": False, "answer": "", "error": str(exc)[:200]}
+    if name.startswith("custom"):
+            try:
+                idx = int(name.split("_")[1])
+            except Exception:
+                return {"name": name, "ok": False, "answer": "", "error": "اسلات نامعتبر"}
+            key = secret_get_chat(f"custom_{idx}_key", "")
+            url = secret_get_chat(f"custom_{idx}_url", "")
+            model = secret_get_chat(f"custom_{idx}_model", "")
+            label = secret_get_chat(f"custom_{idx}_name", "") or f"Custom{idx}"
+            if not key or not url or not model:
+                return {"name": label, "ok": False, "answer": "", "error": "پیکربندی نشده"}
+            st, data = call_json_api(
+                url,
+                key,
+                {"model": model, "messages": messages[-20:], "temperature": 0.4, "max_tokens": 1800},
+                timeout=timeout,
+            )
+            ans = _extract_text_openai_style(data)
+            if 200 <= st < 300 and ans:
+                return {"name": label, "ok": True, "answer": ans}
+            return {"name": label, "ok": False, "answer": "", "error": str(st)}
     return {"name": name, "ok": False, "answer": "", "error": "پیکربندی نشده"}
 
 
 def run_multi_model_chat(messages: list) -> dict:
     """Query all configured providers; return synthesis + per-model answers."""
-    order = ["openrouter", "openai", "claude", "gemini", "grok", "groq"]
+    order = ["openrouter", "openai", "claude", "gemini", "grok", "groq"] + [f"custom_{i}" for i in range(1, 11)]
     results = []
     # sequential to stay stdlib-simple and avoid rate storms; timeout per provider
     for name in order:
@@ -429,6 +450,7 @@ def maybe_flush_learning(force: bool = False) -> dict:
             content = "\n---\n".join(parts)
             title = time.strftime("یادگیری روزانه کاوش %Y-%m-%d", time.localtime(now))
             ensure_knowledge_tables(conn)
+            ensure_secrets_table(conn)
             ensure_learn_tables(conn)
             ingest_document(conn, title=title, content=content, source="کاوش/یادگیری-چندمدلی", lang="fa")
             conn.execute("DELETE FROM learn_buffer")
@@ -1653,7 +1675,81 @@ def brand_answer(text: str) -> str:
     return t + notice
 
 
+
+def ensure_secrets_table(conn) -> None:
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS app_secrets (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at INTEGER NOT NULL)"
+    )
+
+
+def secret_get(key: str, env_fallback: str = "") -> str:
+    """Owner-stored secret overrides env. Never log values."""
+    try:
+        with lock:
+            conn = db()
+            try:
+                ensure_secrets_table(conn)
+                row = conn.execute("SELECT value FROM app_secrets WHERE key=?", (key,)).fetchone()
+                if row and str(row["value"] or "").strip():
+                    return str(row["value"]).strip()
+            finally:
+                conn.close()
+    except Exception:
+        pass
+    return (env_fallback or os.getenv(key.upper().replace("custom_", "CUSTOM_"), "") or "").strip()
+
+
+def secret_get_chat(key: str, env_name: str) -> str:
+    try:
+        with lock:
+            conn = db()
+            try:
+                ensure_secrets_table(conn)
+                row = conn.execute("SELECT value FROM app_secrets WHERE key=?", (key,)).fetchone()
+                if row and str(row["value"] or "").strip():
+                    return str(row["value"]).strip()
+            finally:
+                conn.close()
+    except Exception:
+        pass
+    return (os.getenv(env_name, "") or "").strip()
+
+
+def secret_set(key: str, value: str) -> None:
+    with lock:
+        conn = db()
+        try:
+            ensure_secrets_table(conn)
+            val = (value or "").strip()
+            if not val:
+                conn.execute("DELETE FROM app_secrets WHERE key=?", (key,))
+            else:
+                conn.execute(
+                    "INSERT INTO app_secrets(key, value, updated_at) VALUES(?,?,?) "
+                    "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+                    (key, val, int(time.time())),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def secret_configured(key: str, env_name: str = "") -> bool:
+    return bool(secret_get_chat(key, env_name or key.upper()))
+
+
+def mask_secret(val: str) -> str:
+    v = (val or "").strip()
+    if not v:
+        return ""
+    if len(v) <= 8:
+        return "****"
+    return v[:4] + "…" + v[-4:]
+
+
+
 class Handler(BaseHTTPRequestHandler):
+
 
     server_version = "KavoshAI2-Python"
     def log_message(self, fmt, *args):
@@ -1871,6 +1967,45 @@ class Handler(BaseHTTPRequestHandler):
                 "openTickets": open_tickets, "contests": contests,
                 "activity": [dict(x) for x in logs],
                 "note": "داشبورد کارکنان — عملیات حساس فقط سمت سرور بررسی می‌شود. OAuth گوگل و پرداخت واقعی فعال نیست.",
+            })
+
+
+        if path == "/api/admin/llm-config":
+            s = self.session()
+            if not s or str(s.get("role") or "") != "owner":
+                return self.send_json(403, {"ok": False, "error": "فقط مالک."})
+            slots = []
+            builtins = [
+                ("openrouter", "OpenRouter", "openrouter_key", "OPENROUTER_API_KEY", "openrouter_model", "OPENROUTER_MODEL"),
+                ("openai", "OpenAI", "openai_key", "OPENAI_API_KEY", "openai_model", "OPENAI_MODEL"),
+                ("claude", "Claude", "anthropic_key", "ANTHROPIC_API_KEY", "anthropic_model", "ANTHROPIC_MODEL"),
+                ("gemini", "Gemini", "gemini_key", "GEMINI_API_KEY", "gemini_model", "GEMINI_MODEL"),
+                ("grok", "Grok xAI", "xai_key", "XAI_API_KEY", "xai_model", "XAI_MODEL"),
+                ("groq", "Groq", "groq_key", "GROQ_API_KEY", "groq_model", "GROQ_MODEL"),
+            ]
+            for bid, label, kkey, kenv, mkey, menv in builtins:
+                val = secret_get_chat(kkey, kenv)
+                slots.append({
+                    "id": bid, "label": label, "kind": "builtin",
+                    "keyConfigured": bool(val), "keyMask": mask_secret(val),
+                    "model": secret_get_chat(mkey, menv),
+                })
+            customs = []
+            for i in range(1, 11):
+                k = secret_get_chat(f"custom_{i}_key", "")
+                customs.append({
+                    "slot": i,
+                    "name": secret_get_chat(f"custom_{i}_name", "") or f"API سفارشی {i}",
+                    "url": secret_get_chat(f"custom_{i}_url", ""),
+                    "model": secret_get_chat(f"custom_{i}_model", ""),
+                    "keyConfigured": bool(k),
+                    "keyMask": mask_secret(k),
+                })
+            return self.send_json(200, {
+                "ok": True,
+                "multiModel": MULTI_MODEL_CHAT,
+                "builtins": slots,
+                "custom": customs,
             })
 
         if path == "/api/admin/providers":
@@ -2569,6 +2704,50 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, {"ok": True, "id": vid, "url": public_path})
 
 
+
+        if path == "/api/admin/llm-config":
+            s = self.session()
+            if not s or str(s.get("role") or "") != "owner":
+                return self.send_json(403, {"ok": False, "error": "فقط مالک می‌تواند API تنظیم کند."})
+            try:
+                body = self.read_json(100_000)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+            # builtins: {openrouter_key, openrouter_model, ...} empty string clears override (falls back to env)
+            mapping = [
+                "openrouter_key", "openrouter_model",
+                "openai_key", "openai_model",
+                "anthropic_key", "anthropic_model",
+                "gemini_key", "gemini_model",
+                "xai_key", "xai_model",
+                "groq_key", "groq_model",
+            ]
+            for k in mapping:
+                if k in body:
+                    secret_set(k, str(body.get(k) or ""))
+            # custom 1..10
+            customs = body.get("custom")
+            if isinstance(customs, list):
+                for item in customs[:10]:
+                    if not isinstance(item, dict):
+                        continue
+                    try:
+                        i = int(item.get("slot") or 0)
+                    except Exception:
+                        continue
+                    if i < 1 or i > 10:
+                        continue
+                    if "name" in item:
+                        secret_set(f"custom_{i}_name", str(item.get("name") or ""))
+                    if "url" in item:
+                        secret_set(f"custom_{i}_url", str(item.get("url") or ""))
+                    if "model" in item:
+                        secret_set(f"custom_{i}_model", str(item.get("model") or ""))
+                    if "key" in item:
+                        secret_set(f"custom_{i}_key", str(item.get("key") or ""))
+            return self.send_json(200, {"ok": True, "message": "تنظیمات ذخیره شد."})
+
+
         if path == "/api/chat":
             if not self.rate_allowed(): return self.send_json(429, {"ok": False, "error": "درخواست‌ها خیلی زیاد شده‌اند؛ یک دقیقه بعد دوباره تلاش کن."})
             try:
@@ -2584,7 +2763,14 @@ class Handler(BaseHTTPRequestHandler):
                         search_results = web_search(message, limit=5)
                     except RuntimeError as exc:
                         search_error = str(exc)[:300]
-                if not API_KEY and not (OPENAI_API_KEY or ANTHROPIC_API_KEY or GEMINI_API_KEY or XAI_API_KEY or GROQ_API_KEY):
+                if not any([
+                    secret_get_chat("openrouter_key", "OPENROUTER_API_KEY"),
+                    secret_get_chat("openai_key", "OPENAI_API_KEY"),
+                    secret_get_chat("anthropic_key", "ANTHROPIC_API_KEY"),
+                    secret_get_chat("gemini_key", "GEMINI_API_KEY"),
+                    secret_get_chat("xai_key", "XAI_API_KEY"),
+                    secret_get_chat("groq_key", "GROQ_API_KEY"),
+                ] + [secret_get_chat(f"custom_{i}_key", "") for i in range(1, 11)]):
                     if want_search and search_results:
                         summary = summarize_web_results(message, search_results)
                         return self.send_json(200, {
