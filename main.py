@@ -250,6 +250,72 @@ def urlopen_proxied(request, timeout=60):
     return opener(request, timeout=timeout)
 
 
+
+def http_status_meaning(code) -> str:
+    """Human-readable Persian meaning for common HTTP / API errors."""
+    try:
+        c = int(code)
+    except Exception:
+        s = str(code or "").strip()
+        if not s:
+            return ""
+        # try extract 3-digit
+        m = re.search(r"\b([45]\d{2})\b", s)
+        if m:
+            c = int(m.group(1))
+        else:
+            low = s.lower()
+            if "timeout" in low or "timed out" in low:
+                return "زمان پاسخ تمام شد (Timeout) — شبکه کند یا سرویس در دسترس نیست"
+            if "proxy" in low:
+                return "مشکل پروکسی — PROXY_URL یا تونل را بررسی کنید"
+            if "name or service not known" in low or "resolve" in low:
+                return "نام سرور پیدا نشد (DNS)"
+            if "connection refused" in low:
+                return "اتصال رد شد — سرویس یا پروکسی روشن نیست"
+            return ""
+    meanings = {
+        400: "درخواست نامعتبر (Bad Request) — پارامتر یا بدنه اشتباه است",
+        401: "احراز هویت ناموفق (Unauthorized) — کلید API اشتباه یا منقضی است",
+        403: "دسترسی ممنوع (Forbidden) — کلید مجاز نیست، محدودیت منطقه/IP، یا سرویس این درخواست را بلاک کرده",
+        404: "مسیر یا مدل پیدا نشد (Not Found) — آدرس API یا نام مدل را چک کنید",
+        408: "زمان درخواست تمام شد (Request Timeout)",
+        429: "تعداد درخواست زیاد است (Rate Limit) — کمی صبر کنید یا سقف حساب را بالا ببرید",
+        500: "خطای داخلی سرور ارائه‌دهنده (Internal Server Error)",
+        502: "درگاه نامعتبر (Bad Gateway) — سرویس میانی یا پروکسی مشکل دارد",
+        503: "سرویس موقتاً در دسترس نیست (Service Unavailable)",
+        504: "زمان درگاه تمام شد (Gateway Timeout)",
+    }
+    return meanings.get(c, f"کد وضعیت HTTP {c}")
+
+
+def format_provider_error(code_or_msg, detail: str = "") -> str:
+    """Combine status code + meaning + optional detail for user-facing errors."""
+    raw = str(code_or_msg or "").strip()
+    meaning = http_status_meaning(raw)
+    try:
+        code = int(raw)
+        base = f"خطای {code}"
+    except Exception:
+        m = re.search(r"\b([45]\d{2})\b", raw)
+        if m:
+            code = int(m.group(1))
+            base = f"خطای {code}"
+            meaning = meaning or http_status_meaning(code)
+        else:
+            base = raw[:180] if raw else "خطای نامشخص"
+            code = None
+    parts = [base]
+    if meaning:
+        parts.append(f"یعنی: {meaning}")
+    d = str(detail or "").strip()
+    if d and d not in base and d != str(code_or_msg):
+        parts.append(d[:220])
+    if code == 403:
+        parts.append("اگر در منطقه محدود هستید PROXY_URL را تنظیم کنید یا کلید/سطح دسترسی حساب را بررسی کنید.")
+    return " — ".join(parts)
+
+
 def call_json_api(url: str, key: str, payload: dict, timeout=60, extra_headers=None):
     headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
     headers.update(extra_headers or {})
@@ -305,7 +371,7 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
             if 200 <= st < 300 and ans:
                 return {"name": "OpenRouter", "ok": True, "answer": ans}
             err = (data.get("error") or {}).get("message") if isinstance(data.get("error"), dict) else data.get("error")
-            return {"name": "OpenRouter", "ok": False, "answer": "", "error": str(err or st)[:200]}
+            return {"name": "OpenRouter", "ok": False, "answer": "", "error": format_provider_error(st, str(err or "")[:200])}
 
         if name == "openai" and secret_get_chat("openai_key", "OPENAI_API_KEY"):
             st, data = call_json_api(
@@ -317,7 +383,7 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
             ans = _extract_text_openai_style(data)
             if 200 <= st < 300 and ans:
                 return {"name": "OpenAI", "ok": True, "answer": ans}
-            return {"name": "OpenAI", "ok": False, "answer": "", "error": str(st)}
+            return {"name": "OpenAI", "ok": False, "answer": "", "error": format_provider_error(st)}
 
         if name == "claude" and secret_get_chat("anthropic_key", "ANTHROPIC_API_KEY"):
             # Anthropic messages API
@@ -345,7 +411,7 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
                     if ans:
                         return {"name": "Claude", "ok": True, "answer": ans}
             except HTTPError as exc:
-                return {"name": "Claude", "ok": False, "answer": "", "error": str(exc.code)}
+                return {"name": "Claude", "ok": False, "answer": "", "error": format_provider_error(exc.code)}
             return {"name": "Claude", "ok": False, "answer": "", "error": "empty"}
 
         if name == "gemini" and secret_get_chat("gemini_key", "GEMINI_API_KEY"):
@@ -371,7 +437,7 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
                         if ans:
                             return {"name": "Gemini", "ok": True, "answer": ans}
             except HTTPError as exc:
-                return {"name": "Gemini", "ok": False, "answer": "", "error": str(exc.code)}
+                return {"name": "Gemini", "ok": False, "answer": "", "error": format_provider_error(exc.code)}
             return {"name": "Gemini", "ok": False, "answer": "", "error": "empty"}
 
         if name == "grok" and secret_get_chat("xai_key", "XAI_API_KEY"):
@@ -384,7 +450,7 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
             ans = _extract_text_openai_style(data)
             if 200 <= st < 300 and ans:
                 return {"name": "Grok", "ok": True, "answer": ans}
-            return {"name": "Grok", "ok": False, "answer": "", "error": str(st)}
+            return {"name": "Grok", "ok": False, "answer": "", "error": format_provider_error(st)}
 
         if name == "groq" and secret_get_chat("groq_key", "GROQ_API_KEY"):
             st, data = call_json_api(
@@ -397,10 +463,10 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
             if 200 <= st < 300 and ans:
                 return {"name": "Groq", "ok": True, "answer": ans}
             err = (data.get("error") or {}).get("message") if isinstance(data.get("error"), dict) else data.get("error")
-            return {"name": "Groq", "ok": False, "answer": "", "error": str(err or st)[:200]}
+            return {"name": "Groq", "ok": False, "answer": "", "error": format_provider_error(st, str(err or "")[:200])}
     except Exception as exc:
         labels = {"openrouter": "OpenRouter", "openai": "OpenAI", "claude": "Claude", "gemini": "Gemini", "grok": "Grok", "groq": "Groq"}
-        return {"name": labels.get(name, name), "ok": False, "answer": "", "error": str(exc)[:200]}
+        return {"name": labels.get(name, name), "ok": False, "answer": "", "error": format_provider_error(str(exc)[:200])}
     if name.startswith("custom"):
             try:
                 idx = int(name.split("_")[1])
@@ -421,7 +487,7 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
             ans = _extract_text_openai_style(data)
             if 200 <= st < 300 and ans:
                 return {"name": label, "ok": True, "answer": ans}
-            return {"name": label, "ok": False, "answer": "", "error": str(st)}
+            return {"name": label, "ok": False, "answer": "", "error": format_provider_error(st)}
     return {"name": name, "ok": False, "answer": "", "error": "پیکربندی نشده"}
 
 
@@ -3162,7 +3228,7 @@ class Handler(BaseHTTPRequestHandler):
                     error = str(one.get("error") or "مدل پاسخ خالی برگرداند.")[:500]
                     return self.send_json(502, {
                         "ok": False,
-                        "error": error,
+                        "error": format_provider_error(error),
                         "provider": one.get("name") or single_id,
                         "mode": "single",
                     })
