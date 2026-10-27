@@ -62,7 +62,7 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash").strip()
 XAI_API_KEY = os.getenv("XAI_API_KEY", "").strip()
 XAI_MODEL = os.getenv("XAI_MODEL", "grok-2-latest").strip()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile").strip()
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant").strip()
 MULTI_MODEL_CHAT = (os.getenv("MULTI_MODEL_CHAT", "1").strip().lower() in ("1", "true", "yes", "on"))
 # Outbound proxy for LLM APIs (region blocks). Examples:
 # PROXY_URL=socks5://127.0.0.1:1080   or  http://127.0.0.1:7890
