@@ -53,6 +53,8 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash").strip()
 XAI_API_KEY = os.getenv("XAI_API_KEY", "").strip()
 XAI_MODEL = os.getenv("XAI_MODEL", "grok-2-latest").strip()
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile").strip()
 MULTI_MODEL_CHAT = (os.getenv("MULTI_MODEL_CHAT", "1").strip().lower() in ("1", "true", "yes", "on"))
 SITE_URL = os.getenv("SITE_URL", "https://example.com").strip()
 SITE_NAME = os.getenv("SITE_NAME", "Kavosh AI 2").strip()
@@ -314,15 +316,28 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
             if 200 <= st < 300 and ans:
                 return {"name": "Grok", "ok": True, "answer": ans}
             return {"name": "Grok", "ok": False, "answer": "", "error": str(st)}
+
+        if name == "groq" and GROQ_API_KEY:
+            st, data = call_json_api(
+                "https://api.groq.com/openai/v1/chat/completions",
+                GROQ_API_KEY,
+                {"model": GROQ_MODEL, "messages": messages[-20:], "temperature": 0.4, "max_tokens": 1800},
+                timeout=timeout,
+            )
+            ans = _extract_text_openai_style(data)
+            if 200 <= st < 300 and ans:
+                return {"name": "Groq", "ok": True, "answer": ans}
+            err = (data.get("error") or {}).get("message") if isinstance(data.get("error"), dict) else data.get("error")
+            return {"name": "Groq", "ok": False, "answer": "", "error": str(err or st)[:200]}
     except Exception as exc:
-        labels = {"openrouter": "OpenRouter", "openai": "OpenAI", "claude": "Claude", "gemini": "Gemini", "grok": "Grok"}
+        labels = {"openrouter": "OpenRouter", "openai": "OpenAI", "claude": "Claude", "gemini": "Gemini", "grok": "Grok", "groq": "Groq"}
         return {"name": labels.get(name, name), "ok": False, "answer": "", "error": str(exc)[:200]}
     return {"name": name, "ok": False, "answer": "", "error": "پیکربندی نشده"}
 
 
 def run_multi_model_chat(messages: list) -> dict:
     """Query all configured providers; return synthesis + per-model answers."""
-    order = ["openrouter", "openai", "claude", "gemini", "grok"]
+    order = ["openrouter", "openai", "claude", "gemini", "grok", "groq"]
     results = []
     # sequential to stay stdlib-simple and avoid rate storms; timeout per provider
     for name in order:
@@ -1520,7 +1535,7 @@ def public_provider_status() -> dict:
                 "providersConfigured": {
                     "openrouter": bool(API_KEY), "openai": bool(OPENAI_API_KEY),
                     "claude": bool(ANTHROPIC_API_KEY), "gemini": bool(GEMINI_API_KEY),
-                    "grok": bool(XAI_API_KEY)
+                    "grok": bool(XAI_API_KEY), "groq": bool(GROQ_API_KEY)
                 },
             "note": "کلید فقط روی سرور است و به مرورگر فرستاده نمی‌شود.",
         },
@@ -2569,7 +2584,7 @@ class Handler(BaseHTTPRequestHandler):
                         search_results = web_search(message, limit=5)
                     except RuntimeError as exc:
                         search_error = str(exc)[:300]
-                if not API_KEY and not (OPENAI_API_KEY or ANTHROPIC_API_KEY or GEMINI_API_KEY or XAI_API_KEY):
+                if not API_KEY and not (OPENAI_API_KEY or ANTHROPIC_API_KEY or GEMINI_API_KEY or XAI_API_KEY or GROQ_API_KEY):
                     if want_search and search_results:
                         summary = summarize_web_results(message, search_results)
                         return self.send_json(200, {
