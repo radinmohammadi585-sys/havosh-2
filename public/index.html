@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#050814">
 <title>کاوش AI 2 | Kavosh AI 2</title>
+<meta name="copyright" content="Kavosh AI 2">
+<meta name="author" content="Kavosh AI 2">
   <meta name="theme-color" content="#0b1020">
   <link rel="manifest" href="/manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -821,7 +823,7 @@ function renderConvList(){
 function renderMessages(){
   const box = $('messages');
   if (!messages.length) {
-    box.innerHTML = '<div class="empty">هنوز پیامی نیست. گفتگو را شروع کنید.</div>';
+    box.innerHTML = `<div class="chat-welcome"><h3>سلام، من کاوش هستم</h3><p>چطور می‌تونم کمکت کنم؟</p><p style="margin-top:10px;font-size:12px">سؤال درسی، علمی یا هر موضوعی را بنویسید.</p></div>`;
     return;
   }
   box.innerHTML = messages.map((m, i) =>
@@ -871,6 +873,26 @@ $('newChatBtn').addEventListener('click', () => {
   ensureConv(); renderMessages();
 });
 
+function showThinking(steps){
+  const box = $('messages');
+  if (!box) return;
+  let el = $('thinkingLive');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'thinkingLive';
+    el.className = 'thinking-box';
+    box.appendChild(el);
+  }
+  el.innerHTML = '<div class="th-title">روند فکر کاوش</div>' + steps.map((s,i) =>
+    `<div class="th-step ${s.on?'on':''}"><span class="th-dot"></span><span>${s.text}</span></div>`
+  ).join('');
+  box.scrollTop = box.scrollHeight;
+}
+function clearThinking(){
+  const el = $('thinkingLive');
+  if (el) el.remove();
+}
+
 async function sendChat(){
   const input = $('chatInput');
   const text = input.value.trim();
@@ -882,16 +904,41 @@ async function sendChat(){
   renderMessages();
   persistConv();
   $('sendBtn').disabled = true;
+
+  const steps = [
+    {text: 'خواندن سؤال…', on: true},
+    {text: 'بررسی دانش و منابع…', on: false},
+    {text: 'پرس‌وجو از مدل‌ها…', on: false},
+    {text: 'جمع‌بندی پاسخ…', on: false}
+  ];
+  showThinking(steps);
+  const tick = (i) => { if (steps[i]) { steps[i].on = true; showThinking(steps); } };
+  const t1 = setTimeout(() => tick(1), 400);
+  const t2 = setTimeout(() => tick(2), 1100);
+  const t3 = setTimeout(() => tick(3), 2200);
+
   const history = messages.filter(m => m.role==='user'||m.role==='assistant'||m.role==='bot')
     .slice(0, -1).map(m => ({role: m.role==='bot'?'assistant':m.role, content:m.content}));
   const webSearch = !!($('webSearchToggle') && $('webSearchToggle').checked);
-  const {status, data} = await api('/api/chat', {
-    method:'POST',
-    body: JSON.stringify({message: text, history, webSearch})
-  });
+  let data = {};
+  try {
+    const res = await api('/api/chat', {
+      method:'POST',
+      body: JSON.stringify({message: text, history, webSearch})
+    });
+    data = res.data || {};
+  } catch (e) {
+    data = {ok:false, error: 'ارتباط با سرور برقرار نشد'};
+  }
+  clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
+  clearThinking();
   $('sendBtn').disabled = false;
   if (data.ok && data.answer) {
-    messages.push({role:'bot', content:data.answer, ts: new Date().toLocaleTimeString('fa-IR',{hour:'2-digit',minute:'2-digit'})});
+    let ans = data.answer;
+    if (data.provider) {
+      ans = ans; // keep answer; optional subtle meta already in server note
+    }
+    messages.push({role:'bot', content: ans, ts: new Date().toLocaleTimeString('fa-IR',{hour:'2-digit',minute:'2-digit'})});
     if (data.searchResults && data.searchResults.length) {
       showSearchPanel(data.searchResults, data.note || '');
     }
@@ -1580,6 +1627,20 @@ $('vidPostBtn') && $('vidPostBtn').addEventListener('click', async () => {
   if (data.ok) loadChannel();
 });
 
+
+const HIDE_IMG_KEY = 'kavosh_hide_image_studio';
+function applyHideImageStudio(on){
+  document.body.classList.toggle('hide-image-studio', !!on);
+  const t = $('hideImageStudioToggle');
+  if (t) t.checked = !!on;
+  localStorage.setItem(HIDE_IMG_KEY, on ? '1' : '0');
+}
+(function(){
+  applyHideImageStudio(localStorage.getItem(HIDE_IMG_KEY) === '1');
+  const t = $('hideImageStudioToggle');
+  if (t) t.addEventListener('change', () => applyHideImageStudio(t.checked));
+})();
+
 /* init */
 applyI18n();
 renderFeatures();
@@ -1587,6 +1648,27 @@ renderConvList();
 refreshHealth();
 refreshMe();
 setInterval(refreshHealth, 60000);
+})();
+</script>
+
+<div id="kavosh-copyright-footer" style="position:fixed;bottom:8px;left:50%;transform:translateX(-50%);z-index:30;font-size:10px;color:var(--muted);opacity:.85;pointer-events:none;text-align:center;max-width:90%">
+  © کاوش AI 2 — استفادهٔ تجاری یا انتشار مجدد بدون مجوز صاحب اثر ممنوع است.
+</div>
+<script id="kavosh-protect-soft">
+(() => {
+  // Soft deterrents only — cannot stop a determined copy of public HTML/API.
+  const notice = () => alert('محتوای کاوش AI 2 دارای حقوق محفوظ است. کپی یا انتشار بدون مجوز مجاز نیست.');
+  document.addEventListener('contextmenu', (e) => {
+    if (e.target && (e.target.closest('.messages') || e.target.closest('#page-channel') || e.target.closest('#page-news'))) {
+      e.preventDefault(); notice();
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'u') {
+      // cannot fully block view-source; show notice
+      notice();
+    }
+  });
 })();
 </script>
 </body>
