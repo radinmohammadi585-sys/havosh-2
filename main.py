@@ -2997,6 +2997,18 @@ class Handler(BaseHTTPRequestHandler):
                         search_results = web_search(message, limit=5)
                     except RuntimeError as exc:
                         search_error = str(exc)[:300]
+                # Resolve the requested mode/selection before any local fallback.
+                mode = str(body.get("mode") or body.get("chatMode") or "multi").strip().lower()
+                selected = body.get("models") or body.get("selectedModels") or []
+                if not isinstance(selected, list):
+                    selected = []
+                selected = [str(x).strip() for x in selected if str(x).strip()]
+                multi_modes = ("multi", "multi_custom", "all")
+                explicit_kavosh = mode in ("kavosh", "engine", "knowledge")
+                selected_single_ai = len(selected) == 1 and selected[0].lower() != "kavosh"
+                mode_single_ai = mode not in multi_modes and mode not in ("", "auto", "kavosh", "engine", "knowledge")
+                single_ai_requested = selected_single_ai or mode_single_ai
+
                 if not any([
                     secret_get_chat("openrouter_key", "OPENROUTER_API_KEY"),
                     secret_get_chat("openai_key", "OPENAI_API_KEY"),
@@ -3004,7 +3016,7 @@ class Handler(BaseHTTPRequestHandler):
                     secret_get_chat("gemini_key", "GEMINI_API_KEY"),
                     secret_get_chat("xai_key", "XAI_API_KEY"),
                     secret_get_chat("groq_key", "GROQ_API_KEY"),
-                ] + [secret_get_chat(f"custom_{i}_key", "") for i in range(1, 11)]):
+                ] + [secret_get_chat(f"custom_{i}_key", "") for i in range(1, 11)]) and not single_ai_requested:
                     if want_search and search_results:
                         summary = summarize_web_results(message, search_results)
                         learn_safe(message, summary, ["web-search"])
@@ -3076,14 +3088,8 @@ class Handler(BaseHTTPRequestHandler):
                         messages.append({"role": item["role"], "content": item["content"][:8000]})
                 messages.append({"role": "user", "content": message})
                 # Multi-model path: OpenRouter + OpenAI + Claude + Gemini + Grok (هر کدام که کلید دارد)
-                mode = str(body.get("mode") or body.get("chatMode") or "multi").strip().lower()
-                selected = body.get("models") or body.get("selectedModels") or []
-                if not isinstance(selected, list):
-                    selected = []
-                selected = [str(x).strip() for x in selected if str(x).strip()]
-
                 # --- mode: kavosh engine only ---
-                if mode in ("kavosh", "engine", "knowledge"):
+                if explicit_kavosh:
                     ans = always_answer(message)
                     if search_results and not ans.get("answer"):
                         ans = {"ok": True, "answer": summarize_web_results(message, search_results), "provider": "web-search-summary"}
@@ -3092,11 +3098,10 @@ class Handler(BaseHTTPRequestHandler):
                         learn_safe(message, ans.get("answer", ""), [ans.get("provider") or "kavosh"])
                     return self.send_json(200, ans)
 
-                # --- mode: single model ---
-                if (mode not in ("multi", "multi_custom", "all") and mode not in ("", "auto")) or (selected and len(selected) == 1):
-                    single_id = mode
-                    if selected and len(selected) == 1:
-                        single_id = selected[0]
+                # --- mode: single AI model ---
+                # A single explicit selection takes priority even if the UI sent a multi mode.
+                if single_ai_requested:
+                    single_id = selected[0] if selected_single_ai else mode
                     one = call_one_chat_provider(single_id, messages, timeout=50)
                     if one.get("ok") and one.get("answer"):
                         try:
@@ -3107,14 +3112,17 @@ class Handler(BaseHTTPRequestHandler):
                         if search_results:
                             out["searchResults"] = search_results
                         return self.send_json(200, out)
-                    ans = always_answer(message)
-                    ans["note"] = f"مدل {single_id} پاسخ نداد؛ موتور کاوش جایگزین شد."
-                    ans["upstreamError"] = one.get("error")
-                    return self.send_json(200, ans)
+                    # Never replace a failed single-provider request with Kavosh.
+                    out = {"ok": False, "error": f"مدل {single_id} پاسخ نداد.", "provider": one.get("name") or single_id, "mode": "single"}
+                    if one.get("error"):
+                        out["upstreamError"] = one.get("error")
+                    if search_results:
+                        out["searchResults"] = search_results
+                    return self.send_json(200, out)
 
                 # --- multi or multi_custom ---
                 only = selected if mode == "multi_custom" and selected else None
-                if MULTI_MODEL_CHAT or only is not None or True:
+                if MULTI_MODEL_CHAT or only is not None:
                     multi = run_multi_model_chat(messages, only=only)
                     if multi.get("ok") and multi.get("answer"):
                         learn_safe(message, multi["answer"], multi.get("models_ok") or [])
