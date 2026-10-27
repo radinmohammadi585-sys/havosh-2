@@ -1161,10 +1161,98 @@ async function loadNotifs(){
   $('notifList').innerHTML = '<div class="empty">اعلانی نیست</div>';
 }
 
+
+async function loadOwnerLlmConfig(){
+  const box = $('ownerLlmBox');
+  if (!box || !user || user.role !== 'owner') return;
+  box.innerHTML = '<div class="alert loading">بارگذاری تنظیمات چندمدلی…</div>';
+  const {data} = await api('/api/admin/llm-config');
+  if (!data.ok) {
+    box.innerHTML = `<div class="alert err">${escapeHtml(data.error||'خطا')}</div>`;
+    return;
+  }
+  const builtins = data.builtins || [];
+  const customs = data.custom || [];
+  let h = '<h3>تنظیم API چندمدلی (فقط مالک)</h3>';
+  h += '<p style="font-size:12px;color:var(--muted)">تا ۶ سرویس اصلی + ۱۰ API سفارشی (سازگار با OpenAI). فقط کلید را وارد کنید؛ برای سفارشی آدرس و مدل هم لازم است.</p>';
+  h += '<div class="grid">';
+  builtins.forEach(b => {
+    h += `<div class="card"><h3>${escapeHtml(b.label)}</h3>
+      <p>وضعیت کلید: <span class="badge ${b.keyConfigured?'good':'bad'}">${b.keyConfigured?escapeHtml(b.keyMask||'ست شده'):'نیست'}</span></p>
+      <label style="font-size:12px;color:var(--muted)">کلید جدید (خالی = بدون تغییر/پاک‌سازی با دکمه)
+        <input type="password" id="llm_key_${escapeHtml(b.id)}" placeholder="کلید را وارد کنید" autocomplete="off">
+      </label>
+      <label style="font-size:12px;color:var(--muted)">مدل
+        <input type="text" id="llm_model_${escapeHtml(b.id)}" value="${escapeHtml(b.model||'')}">
+      </label>
+      <button class="btn btn-ghost" type="button" data-clear-llm="${escapeHtml(b.id)}">پاک کردن کلید ذخیره‌شده</button>
+    </div>`;
+  });
+  h += '</div><h3 style="margin-top:16px">API سفارشی ۱ تا ۱۰</h3><div class="grid">';
+  customs.forEach(c => {
+    h += `<div class="card"><h3>اسلات ${c.slot}</h3>
+      <label style="font-size:12px">نام <input type="text" id="c_name_${c.slot}" value="${escapeHtml(c.name||'')}"></label>
+      <label style="font-size:12px">آدرس API (chat completions) <input type="url" id="c_url_${c.slot}" value="${escapeHtml(c.url||'')}" placeholder="https://api.example.com/v1/chat/completions"></label>
+      <label style="font-size:12px">مدل <input type="text" id="c_model_${c.slot}" value="${escapeHtml(c.model||'')}"></label>
+      <label style="font-size:12px">کلید <input type="password" id="c_key_${c.slot}" placeholder="${c.keyConfigured?escapeHtml(c.keyMask):'کلید'}" autocomplete="off"></label>
+      <p style="font-size:11px;color:var(--muted)">کلید: ${c.keyConfigured?'پیکربندی شده':'خالی'}</p>
+    </div>`;
+  });
+  h += '</div><button class="btn btn-primary" type="button" id="saveLlmBtn" style="margin-top:12px">ذخیره تنظیمات API</button>';
+  h += '<div id="llmSaveMsg" style="margin-top:8px"></div>';
+  box.innerHTML = h;
+
+  const keyMap = {
+    openrouter: 'openrouter_key', openai: 'openai_key', claude: 'anthropic_key',
+    gemini: 'gemini_key', grok: 'xai_key', groq: 'groq_key'
+  };
+  const modelMap = {
+    openrouter: 'openrouter_model', openai: 'openai_model', claude: 'anthropic_model',
+    gemini: 'gemini_model', grok: 'xai_model', groq: 'groq_model'
+  };
+
+  box.querySelectorAll('[data-clear-llm]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-clear-llm');
+      const body = {};
+      body[keyMap[id]] = '';
+      const {data} = await api('/api/admin/llm-config', {method:'POST', body: JSON.stringify(body)});
+      $('llmSaveMsg').innerHTML = data.ok ? '<div class="alert ok">کلید پاک شد</div>' : `<div class="alert err">${escapeHtml(data.error||'خطا')}</div>`;
+      if (data.ok) loadOwnerLlmConfig();
+    });
+  });
+
+  $('saveLlmBtn') && $('saveLlmBtn').addEventListener('click', async () => {
+    const body = {};
+    Object.keys(keyMap).forEach(id => {
+      const kEl = $('llm_key_'+id);
+      const mEl = $('llm_model_'+id);
+      if (kEl && kEl.value.trim()) body[keyMap[id]] = kEl.value.trim();
+      if (mEl) body[modelMap[id]] = mEl.value.trim();
+    });
+    body.custom = [];
+    for (let i=1;i<=10;i++){
+      const item = {slot:i};
+      const n=$('c_name_'+i), u=$('c_url_'+i), m=$('c_model_'+i), k=$('c_key_'+i);
+      if (n) item.name = n.value.trim();
+      if (u) item.url = u.value.trim();
+      if (m) item.model = m.value.trim();
+      if (k && k.value.trim()) item.key = k.value.trim();
+      body.custom.push(item);
+    }
+    $('llmSaveMsg').innerHTML = '<div class="alert loading">در حال ذخیره…</div>';
+    const {data} = await api('/api/admin/llm-config', {method:'POST', body: JSON.stringify(body)});
+    $('llmSaveMsg').innerHTML = data.ok ? `<div class="alert ok">${escapeHtml(data.message||'ذخیره شد')}</div>` : `<div class="alert err">${escapeHtml(data.error||'خطا')}</div>`;
+    if (data.ok) loadOwnerLlmConfig();
+  });
+}
+
 async function loadAdmin(){
   const gate = $('adminLoginGate');
   const panel = $('adminPanel');
-  if (!user || (user.role !== 'manager' && !(user.role||'').startsWith('deputy') && !(user.role||'').startsWith('teacher'))) {
+  const r0 = (user && user.role) || '';
+  const canAdmin = user && (r0 === 'owner' || r0 === 'manager' || r0.startsWith('manager') || r0.startsWith('deputy') || r0.startsWith('teacher'));
+  if (!canAdmin) {
     gate.style.display = '';
     panel.style.display = 'none';
     panel.innerHTML = '';
@@ -1229,8 +1317,12 @@ async function loadAdmin(){
     <div id="adminTestMsg" style="margin-top:12px"></div>
     <h3>فعالیت اخیر</h3>
     <div>${(sum.activity||[]).map(a=>`<div class="card" style="margin-bottom:8px"><strong>${escapeHtml(a.actor||'')}</strong> — ${escapeHtml(a.action||'')} <span class="badge">${escapeHtml(a.detail||'')}</span></div>`).join('')||'<div class="empty">—</div>'}</div>
-    <p class="alert warn" style="margin-top:16px">تغییر مدل/کلید فقط از Environment سرویس میزبانی (مثل Render) ممکن است. این برنامه نمی‌تواند متغیرهای Render را از داخل تغییر دهد؛ پس از تغییر env معمولاً Redeploy لازم است.</p>
+    <div id="ownerLlmBox" style="margin-top:18px"></div>
+    <p class="alert warn" style="margin-top:16px">کلیدها در دیتابیس سرور ذخیره می‌شوند (اولویت بالاتر از Environment). فقط مالک می‌تواند آن‌ها را ببیند/عوض کند. مقدار کامل کلید به مرورگر برنمی‌گردد.</p>
   `;
+  if (user.role === 'owner') {
+    loadOwnerLlmConfig();
+  }
   panel.querySelectorAll('[data-test]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const kind = btn.getAttribute('data-test');
