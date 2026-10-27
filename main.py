@@ -3093,7 +3093,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json(200, ans)
 
                 # --- mode: single model ---
-                if mode not in ("multi", "multi_custom", "all") and mode not in ("", "auto"):
+                if (mode not in ("multi", "multi_custom", "all") and mode not in ("", "auto")) or (selected and len(selected) == 1):
                     single_id = mode
                     if selected and len(selected) == 1:
                         single_id = selected[0]
