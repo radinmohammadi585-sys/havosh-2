@@ -65,7 +65,7 @@ font:inherit;font-size:13px;transition:.2s}
 .nav .icon{width:20px;text-align:center;opacity:.85}
 .nav-label{font-size:10px;letter-spacing:1px;color:var(--muted);padding:8px 10px 4px;text-transform:uppercase}
 .main{display:flex;flex-direction:column;gap:14px;min-width:0}
-.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+.topbar{position:relative;z-index:40;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
 border:1px solid var(--line);border-radius:18px;background:var(--panel);backdrop-filter:blur(16px);padding:10px 14px}
 .topbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 select,input,textarea,button.btn{font:inherit}
@@ -149,6 +149,31 @@ background:linear-gradient(135deg,#6b8cff,#9b7dff);border:none;color:#fff;font-s
 .thinking-live .t-text{font-weight:600}
 .thinking-live .t-sub{display:block;font-size:11px;color:var(--muted);font-weight:400;margin-top:2px}
 
+
+.model-picker{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 12px;align-items:center}
+.model-chip{
+  border:1px solid var(--line);background:rgba(8,12,28,.55);color:var(--text);
+  border-radius:999px;padding:7px 12px;font:inherit;font-size:12px;cursor:pointer;transition:.15s
+}
+.model-chip:hover{border-color:var(--blue)}
+.model-chip.active{background:linear-gradient(135deg,rgba(139,167,255,.3),rgba(177,154,255,.2));border-color:rgba(139,167,255,.55);font-weight:700}
+.model-custom-box{display:none;margin:8px 0 12px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+.model-custom-box.on{display:block}
+.model-custom-box label{display:inline-flex;align-items:center;gap:6px;margin:4px 8px 4px 0;font-size:12px;color:var(--muted);cursor:pointer}
+
+
+.model-menu{position:relative}
+.model-menu-btn{white-space:nowrap}
+.model-menu-panel{display:none;position:absolute;top:calc(100% + 6px);inset-inline-end:0;z-index:60;min-width:250px;max-width:min(320px,92vw);max-height:70vh;overflow:auto;
+  background:#0e1530;border:1px solid var(--line);border-radius:14px;padding:10px;box-shadow:0 12px 40px rgba(0,0,0,.45)}
+.model-menu-panel.on{display:block}
+.model-menu-panel h4{margin:6px 4px;font-size:11px;color:var(--muted);font-weight:600}
+.mm-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;cursor:pointer;font-size:13px;color:var(--text)}
+.mm-row:hover{background:rgba(139,167,255,.12)}
+.mm-row.active{background:linear-gradient(135deg,rgba(139,167,255,.28),rgba(177,154,255,.18));font-weight:700}
+.mm-row input{margin:0}
+[data-theme="light"] .model-menu-panel{background:#fff}
+.mm-sep{height:1px;background:var(--line);margin:8px 0}
 </style>
 </head>
 <body>
@@ -193,6 +218,10 @@ background:linear-gradient(135deg,#6b8cff,#9b7dff);border:none;color:#fff;font-s
       </div>
       <div class="topbar-actions">
         <select id="langSelect" title="Language"></select>
+        <div class="model-menu" id="modelMenu">
+          <button class="btn btn-ghost model-menu-btn" id="modelMenuBtn" type="button" aria-haspopup="true" aria-expanded="false">🧠 چندمدلی ▾</button>
+          <div class="model-menu-panel" id="modelMenuPanel" role="menu"></div>
+        </div>
         <select id="themeSelect" title="تم">
           <option value="dark">فضایی (پیش‌فرض)</option>
           <option value="light">روشن</option>
@@ -229,6 +258,7 @@ background:linear-gradient(135deg,#6b8cff,#9b7dff);border:none;color:#fff;font-s
     <!-- CHAT -->
     <section class="page" id="page-chat">
       <h2 style="margin-top:0" data-i18n="nav_chat">چت هوش مصنوعی</h2>
+      <div id="modelHint" class="small" style="color:var(--muted);margin:-4px 0 10px">مدل پاسخ‌گو: <b id="modelHintText">چندمدلی (همه)</b> — از بالای صفحه، کنار زبان، تغییرش بده.</div>
       <div id="chatSetup" class="alert warn" style="display:none"></div>
       <details style="margin-bottom:10px" class="card">
         <summary style="cursor:pointer;font-weight:600">حافظه گفتگو</summary>
@@ -909,6 +939,119 @@ function clearThinking(){
   if (el) el.remove();
 }
 
+
+let chatMode = localStorage.getItem('kavosh_chat_mode') || 'multi';
+let chatModelsCatalog = [];
+let chatModesCatalog = [];
+let chatCustomSelected = [];
+try { chatCustomSelected = JSON.parse(localStorage.getItem('kavosh_chat_custom_models') || '[]'); } catch(e) { chatCustomSelected = []; }
+if (!Array.isArray(chatCustomSelected)) chatCustomSelected = [];
+
+function chatModeLabel(){
+  if (chatMode === 'multi') return 'چندمدلی (همه)';
+  if (chatMode === 'multi_custom') return 'چندمدلی شخصی (' + chatCustomSelected.length + ')';
+  const m = chatModesCatalog.concat(chatModelsCatalog).find(x => x.id === chatMode);
+  return m ? m.label : chatMode;
+}
+function updateModelButton(){
+  const btn = $('modelMenuBtn');
+  if (btn) btn.textContent = '🧠 ' + chatModeLabel() + ' ▾';
+  const h = $('modelHintText');
+  if (h) h.textContent = chatModeLabel();
+}
+
+function renderModelMenu(){
+  const panel = $('modelMenuPanel');
+  if (!panel) return;
+  const row = (id, label, active) =>
+    `<div class="mm-row ${active?'active':''}" data-mode="${escapeHtml(id)}" role="menuitemradio" aria-checked="${active}"><span>${active?'●':'○'}</span><span>${escapeHtml(label)}</span></div>`;
+  let h = '<h4>حالت پاسخ</h4>';
+  chatModesCatalog.forEach(m => { h += row(m.id, m.label, chatMode === m.id); });
+  const singles = chatModelsCatalog.filter(m => m.kind !== 'engine');
+  if (singles.length) {
+    h += '<div class="mm-sep"></div><h4>فقط یک مدل</h4>';
+    singles.forEach(m => { h += row(m.id, m.label, chatMode === m.id); });
+  }
+  if (chatMode === 'multi_custom') {
+    h += '<div class="mm-sep"></div><h4>مدل‌های چندمدلی شخصی (هر کدام را خواستی بردار)</h4>';
+    if (!chatModelsCatalog.length) {
+      h += '<div class="small" style="padding:6px 10px;color:var(--muted)">مدلی پیکربندی نشده.</div>';
+    }
+    chatModelsCatalog.forEach(m => {
+      const on = chatCustomSelected.includes(m.id);
+      h += `<label class="mm-row"><input type="checkbox" data-cm="${escapeHtml(m.id)}" ${on?'checked':''}><span>${escapeHtml(m.label)}${m.kind==='engine'?' ⚙':''}</span></label>`;
+    });
+  }
+  panel.innerHTML = h;
+  panel.querySelectorAll('[data-mode]').forEach(el => {
+    el.addEventListener('click', () => {
+      chatMode = el.getAttribute('data-mode');
+      localStorage.setItem('kavosh_chat_mode', chatMode);
+      if (chatMode === 'multi_custom' && !chatCustomSelected.length) {
+        chatCustomSelected = chatModelsCatalog.map(m => m.id);
+        localStorage.setItem('kavosh_chat_custom_models', JSON.stringify(chatCustomSelected));
+      }
+      renderModelMenu();
+      updateModelButton();
+      if (chatMode !== 'multi_custom') toggleModelMenu(false);
+    });
+  });
+  panel.querySelectorAll('[data-cm]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const id = cb.getAttribute('data-cm');
+      if (cb.checked) { if (!chatCustomSelected.includes(id)) chatCustomSelected.push(id); }
+      else chatCustomSelected = chatCustomSelected.filter(x => x !== id);
+      localStorage.setItem('kavosh_chat_custom_models', JSON.stringify(chatCustomSelected));
+      updateModelButton();
+    });
+  });
+}
+
+function toggleModelMenu(force){
+  const panel = $('modelMenuPanel'), btn = $('modelMenuBtn');
+  if (!panel) return;
+  const on = typeof force === 'boolean' ? force : !panel.classList.contains('on');
+  panel.classList.toggle('on', on);
+  if (btn) btn.setAttribute('aria-expanded', String(on));
+}
+
+async function loadChatModels(){
+  try {
+    const {data} = await api('/api/chat/models');
+    if (data && data.ok) {
+      chatModesCatalog = data.modes || [];
+      chatModelsCatalog = data.models || [];
+    }
+  } catch(e) {}
+  if (!chatModesCatalog.length) {
+    chatModesCatalog = [
+      {id:'multi', label:'چندمدلی (همه)'},
+      {id:'multi_custom', label:'چندمدلی شخصی'},
+      {id:'kavosh', label:'موتور کاوش'}
+    ];
+  }
+  // انتخاب‌های قدیمی که دیگر وجود ندارند را پاک کن
+  const known = new Set(chatModelsCatalog.map(m => m.id));
+  chatCustomSelected = chatCustomSelected.filter(id => known.has(id));
+  const validModes = new Set(chatModesCatalog.map(m => m.id).concat(chatModelsCatalog.filter(m => m.kind !== 'engine').map(m => m.id)));
+  if (!validModes.has(chatMode)) chatMode = 'multi';
+  renderModelMenu();
+  updateModelButton();
+}
+
+(function initModelMenu(){
+  const btn = $('modelMenuBtn');
+  if (btn) btn.addEventListener('click', (e) => { e.stopPropagation(); toggleModelMenu(); });
+  const pnl = $('modelMenuPanel');
+  if (pnl) pnl.addEventListener('click', (e) => e.stopPropagation());
+  document.addEventListener('click', (e) => {
+    const menu = $('modelMenu');
+    if (menu && !menu.contains(e.target)) toggleModelMenu(false);
+  });
+  loadChatModels();
+})();
+
+
 async function sendChat(){
   const input = $('chatInput');
   const text = input.value.trim();
@@ -930,7 +1073,13 @@ async function sendChat(){
   try {
     const res = await api('/api/chat', {
       method:'POST',
-      body: JSON.stringify({message: text, history, webSearch})
+      body: JSON.stringify({
+        message: text,
+        history,
+        webSearch,
+        mode: chatMode,
+        models: chatMode === 'multi_custom' ? chatCustomSelected : (chatMode==='multi'||chatMode==='kavosh' ? [] : [chatMode])
+      })
     });
     data = res.data || {};
   } catch (e) {
@@ -940,8 +1089,8 @@ async function sendChat(){
   $('sendBtn').disabled = false;
   if (data.ok && data.answer) {
     let ans = data.answer;
-    if (data.provider) {
-      ans = ans; // keep answer; optional subtle meta already in server note
+    if (Array.isArray(data.models) && data.models.length > 1) {
+      ans += '\n\n— جمع‌بندی از ' + data.models.length + ' منبع: ' + data.models.join('، ');
     }
     messages.push({role:'bot', content: ans, ts: new Date().toLocaleTimeString('fa-IR',{hour:'2-digit',minute:'2-digit'})});
     if (data.searchResults && data.searchResults.length) {
