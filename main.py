@@ -316,6 +316,39 @@ def format_provider_error(code_or_msg, detail: str = "") -> str:
     return " — ".join(parts)
 
 
+
+def api_error_text(status, data=None, exc=None) -> str:
+    """Prefer the provider's own error message; fall back to status only."""
+    parts = []
+    if data is not None:
+        err = data.get("error") if isinstance(data, dict) else None
+        if isinstance(err, dict):
+            msg = err.get("message") or err.get("msg") or err.get("error")
+            if err.get("type"):
+                parts.append(str(err.get("type")))
+            if msg:
+                parts.append(str(msg))
+            if err.get("code") is not None and str(err.get("code")) not in str(msg or ""):
+                parts.append(f"code={err.get('code')}")
+        elif isinstance(err, str) and err.strip():
+            parts.append(err.strip())
+        elif isinstance(data, dict):
+            for k in ("message", "detail", "msg"):
+                if data.get(k):
+                    parts.append(str(data.get(k)))
+                    break
+            # Gemini style
+            if data.get("error") is None and data.get("message"):
+                parts.append(str(data["message"]))
+    if not parts and exc is not None:
+        parts.append(str(exc)[:400])
+    if not parts:
+        parts.append(f"HTTP {status}" if status is not None else "unknown error")
+    elif status is not None and str(status) not in parts[0]:
+        parts.insert(0, f"HTTP {status}")
+    return " — ".join(str(p)[:300] for p in parts if p)[:500]
+
+
 def call_json_api(url: str, key: str, payload: dict, timeout=60, extra_headers=None):
     headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
     headers.update(extra_headers or {})
@@ -371,7 +404,7 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
             if 200 <= st < 300 and ans:
                 return {"name": "OpenRouter", "ok": True, "answer": ans}
             err = (data.get("error") or {}).get("message") if isinstance(data.get("error"), dict) else data.get("error")
-            return {"name": "OpenRouter", "ok": False, "answer": "", "error": format_provider_error(st, str(err or "")[:200])}
+            return {"name": "OpenRouter", "ok": False, "answer": "", "error": api_error_text(st, data)}
 
         if name == "openai" and secret_get_chat("openai_key", "OPENAI_API_KEY"):
             st, data = call_json_api(
@@ -383,7 +416,7 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
             ans = _extract_text_openai_style(data)
             if 200 <= st < 300 and ans:
                 return {"name": "OpenAI", "ok": True, "answer": ans}
-            return {"name": "OpenAI", "ok": False, "answer": "", "error": format_provider_error(st)}
+            return {"name": "OpenAI", "ok": False, "answer": "", "error": api_error_text(st, data)}
 
         if name == "claude" and secret_get_chat("anthropic_key", "ANTHROPIC_API_KEY"):
             # Anthropic messages API
@@ -411,7 +444,13 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
                     if ans:
                         return {"name": "Claude", "ok": True, "answer": ans}
             except HTTPError as exc:
-                return {"name": "Claude", "ok": False, "answer": "", "error": format_provider_error(exc.code)}
+                raw = b""
+                try:
+                    raw = exc.read(1_000_000)
+                    data = json.loads(raw.decode("utf-8"))
+                except Exception:
+                    data = {"error": raw.decode("utf-8", errors="replace")[:400] if raw else str(exc)}
+                return {"name": "Claude", "ok": False, "answer": "", "error": api_error_text(exc.code, data, exc)}
             return {"name": "Claude", "ok": False, "answer": "", "error": "empty"}
 
         if name == "gemini" and secret_get_chat("gemini_key", "GEMINI_API_KEY"):
@@ -437,7 +476,13 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
                         if ans:
                             return {"name": "Gemini", "ok": True, "answer": ans}
             except HTTPError as exc:
-                return {"name": "Gemini", "ok": False, "answer": "", "error": format_provider_error(exc.code)}
+                raw = b""
+                try:
+                    raw = exc.read(1_000_000)
+                    data = json.loads(raw.decode("utf-8"))
+                except Exception:
+                    data = {"error": raw.decode("utf-8", errors="replace")[:400] if raw else str(exc)}
+                return {"name": "Gemini", "ok": False, "answer": "", "error": api_error_text(exc.code, data, exc)}
             return {"name": "Gemini", "ok": False, "answer": "", "error": "empty"}
 
         if name == "grok" and secret_get_chat("xai_key", "XAI_API_KEY"):
@@ -450,7 +495,7 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
             ans = _extract_text_openai_style(data)
             if 200 <= st < 300 and ans:
                 return {"name": "Grok", "ok": True, "answer": ans}
-            return {"name": "Grok", "ok": False, "answer": "", "error": format_provider_error(st)}
+            return {"name": "Grok", "ok": False, "answer": "", "error": api_error_text(st, data)}
 
         if name == "groq" and secret_get_chat("groq_key", "GROQ_API_KEY"):
             st, data = call_json_api(
@@ -463,10 +508,10 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
             if 200 <= st < 300 and ans:
                 return {"name": "Groq", "ok": True, "answer": ans}
             err = (data.get("error") or {}).get("message") if isinstance(data.get("error"), dict) else data.get("error")
-            return {"name": "Groq", "ok": False, "answer": "", "error": format_provider_error(st, str(err or "")[:200])}
+            return {"name": "Groq", "ok": False, "answer": "", "error": api_error_text(st, data)}
     except Exception as exc:
         labels = {"openrouter": "OpenRouter", "openai": "OpenAI", "claude": "Claude", "gemini": "Gemini", "grok": "Grok", "groq": "Groq"}
-        return {"name": labels.get(name, name), "ok": False, "answer": "", "error": format_provider_error(str(exc)[:200])}
+        return {"name": labels.get(name, name), "ok": False, "answer": "", "error": api_error_text(None, None, exc)}
     if name.startswith("custom"):
             try:
                 idx = int(name.split("_")[1])
@@ -487,7 +532,7 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
             ans = _extract_text_openai_style(data)
             if 200 <= st < 300 and ans:
                 return {"name": label, "ok": True, "answer": ans}
-            return {"name": label, "ok": False, "answer": "", "error": format_provider_error(st)}
+            return {"name": label, "ok": False, "answer": "", "error": api_error_text(st, data)}
     return {"name": name, "ok": False, "answer": "", "error": "پیکربندی نشده"}
 
 
@@ -3228,7 +3273,7 @@ class Handler(BaseHTTPRequestHandler):
                     error = str(one.get("error") or "مدل پاسخ خالی برگرداند.")[:500]
                     return self.send_json(502, {
                         "ok": False,
-                        "error": format_provider_error(error),
+                        "error": error,
                         "provider": one.get("name") or single_id,
                         "mode": "single",
                     })
