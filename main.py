@@ -350,7 +350,13 @@ def api_error_text(status, data=None, exc=None) -> str:
 
 
 def call_json_api(url: str, key: str, payload: dict, timeout=60, extra_headers=None):
-    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    # User-Agent required: some providers (Groq/Cloudflare) return bare HTTP 403 without it.
+    headers = {
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": "KavoshAI2/2.1 (+https://github.com/kavosh; educational)",
+    }
     headers.update(extra_headers or {})
     request = Request(url, data=json_bytes(payload), headers=headers, method="POST")
     try:
@@ -429,6 +435,7 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
                 "x-api-key": secret_get_chat("anthropic_key", "ANTHROPIC_API_KEY"),
                 "anthropic-version": "2023-06-01",
                 "Content-Type": "application/json",
+                "User-Agent": "KavoshAI2/2.1",
             }
             request = Request(
                 "https://api.anthropic.com/v1/messages",
@@ -465,7 +472,7 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
             sys = " ".join(m["content"] for m in messages if m.get("role") == "system")[:2000]
             prompt = (sys + "\n\n" if sys else "") + user_content
             payload = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"maxOutputTokens": 1800}}
-            request = Request(url, data=json_bytes(payload), headers={"Content-Type": "application/json"}, method="POST")
+            request = Request(url, data=json_bytes(payload), headers={"Content-Type": "application/json", "User-Agent": "KavoshAI2/2.1"}, method="POST")
             try:
                 with urlopen_proxied(request, timeout=timeout) as response:
                     data = json.loads(response.read(2_000_000).decode("utf-8"))
