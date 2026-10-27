@@ -56,6 +56,9 @@ XAI_MODEL = os.getenv("XAI_MODEL", "grok-2-latest").strip()
 MULTI_MODEL_CHAT = (os.getenv("MULTI_MODEL_CHAT", "1").strip().lower() in ("1", "true", "yes", "on"))
 SITE_URL = os.getenv("SITE_URL", "https://example.com").strip()
 SITE_NAME = os.getenv("SITE_NAME", "Kavosh AI 2").strip()
+PAYMENT_CARD_NUMBER = os.getenv("PAYMENT_CARD_NUMBER", "5022291615275201").strip().replace(" ", "")
+PAYMENT_CARD_HOLDER = os.getenv("PAYMENT_CARD_HOLDER", "رادین محمدی ارباطی").strip()
+
 COPYRIGHT_OWNER = os.getenv("COPYRIGHT_OWNER", "Kavosh AI 2 - All rights reserved").strip()
 INSTANCE_ID = os.getenv("INSTANCE_ID", "").strip() or secrets.token_hex(4)
 
@@ -1795,7 +1798,7 @@ class Handler(BaseHTTPRequestHandler):
                     } for r in rows]
                 finally:
                     conn.close()
-            return self.send_json(200, {"ok": True, "plans": plans})
+            return self.send_json(200, {"ok": True, "plans": plans, "paymentCard": {"number": PAYMENT_CARD_NUMBER, "holder": PAYMENT_CARD_HOLDER, "formatted": " ".join(PAYMENT_CARD_NUMBER[i:i+4] for i in range(0, len(PAYMENT_CARD_NUMBER), 4)) if PAYMENT_CARD_NUMBER else ""}})
         if path == "/api/contests":
             from urllib.parse import parse_qs
             qs = parse_qs(urlparse(self.path).query)
@@ -2399,14 +2402,25 @@ class Handler(BaseHTTPRequestHandler):
             with lock:
                 conn = db()
                 try:
-                    result = create_purchase(conn, str(s["role"]), plan_id, plan_name)
+                    payment_method = str(body.get("paymentMethod") or body.get("payment_method") or "card").strip().lower()
+                    note = str(body.get("note") or "").strip()[:500]
+                    result = create_purchase(conn, str(s["role"]), plan_id, plan_name, payment_method=payment_method, note=note)
                     conn.commit()
                 finally:
                     conn.close()
             log_activity(str(s["role"]), "purchase_request", result.get("id", ""))
+            pm = result.get("payment_method") or "card"
+            if pm == "kavosh":
+                msg = "درخواست با پرداخت «پول کاوش» ثبت شد. پس از کسر موجودی/تأیید مدیر فعال می‌شود."
+            else:
+                msg = (
+                    "درخواست واریز به کارت ثبت شد. مبلغ را به کارت اعلام‌شده واریز کنید و در تیکت/یادداشت پیگیری کنید. "
+                    "فعال‌سازی پس از تأیید مدیر است (پرداخت خودکار نیست)."
+                )
             return self.send_json(200, {
                 **result,
-                "message": "درخواست خرید ثبت شد و برای بررسی مدیر/پشتیبانی ارسال شد. این پرداخت خودکار نیست.",
+                "message": msg,
+                "paymentCard": {"number": PAYMENT_CARD_NUMBER, "holder": PAYMENT_CARD_HOLDER},
             })
 
 
