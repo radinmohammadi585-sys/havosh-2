@@ -39,6 +39,14 @@ PUBLIC = ROOT / "public"
 DATA_DIR = ROOT / "data"
 DB_PATH = DATA_DIR / "kavosh.db"
 VIDEO_UPLOAD_DIR = DATA_DIR / "uploads" / "videos"
+# فایل موتور کاوش: هر پرسش + خلاصهٔ پاسخ اینجا کپی می‌شود (هر LEARN_INTERVAL_SECONDS ثانیه)
+ENGINE_FILE = Path(os.getenv("ENGINE_FILE", str(DATA_DIR / "kavosh_engine.md")))
+LEARN_INTERVAL = max(30, int(os.getenv("LEARN_INTERVAL_SECONDS", "120") or 120))
+# آپلود اختیاری فایل موتور به گیت‌هاب (برای رندر که دیسکش پاک می‌شود)
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "").strip()
+GITHUB_REPO = os.getenv("GITHUB_REPO", "").strip()          # مثل: user/repo
+GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "engine-data").strip() or "engine-data"
+GITHUB_ENGINE_PATH = os.getenv("GITHUB_ENGINE_PATH", "kavosh_engine.md").strip() or "kavosh_engine.md"
 MAX_VIDEO_UPLOAD_BYTES = 25 * 1024 * 1024
 ALLOWED_VIDEO_EXT = {".mp4", ".webm"}
 
@@ -223,6 +231,17 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
         if m.get("role") == "user":
             user_content = m.get("content") or ""
             break
+    if name == "kavosh":
+        # موتور کاوش (دانش محلی + وب + ویکی‌پدیا) به‌عنوان یکی از اعضای چندمدلی
+        try:
+            q = user_content.strip()
+            res = always_answer(q) if q else {}
+            ans = (res.get("answer") or "").strip()
+            if ans and res.get("provider") != "kavosh-always":
+                return {"name": "موتور کاوش", "ok": True, "answer": ans}
+            return {"name": "موتور کاوش", "ok": False, "answer": "", "error": "منبع قوی پیدا نشد"}
+        except Exception as exc:
+            return {"name": "موتور کاوش", "ok": False, "answer": "", "error": str(exc)[:200]}
     try:
         if name == "openrouter" and secret_get_chat("openrouter_key", "OPENROUTER_API_KEY"):
             st, data = call_json_api(
@@ -356,40 +375,156 @@ def call_one_chat_provider(name: str, messages: list, timeout: int = 35) -> dict
     return {"name": name, "ok": False, "answer": "", "error": "پیکربندی نشده"}
 
 
-def run_multi_model_chat(messages: list) -> dict:
-    """Query all configured providers; return synthesis + per-model answers."""
-    order = ["openrouter", "openai", "claude", "gemini", "grok", "groq"] + [f"custom_{i}" for i in range(1, 11)]
-    results = []
-    # sequential to stay stdlib-simple and avoid rate storms; timeout per provider
-    for name in order:
-        r = call_one_chat_provider(name, messages, timeout=40)
-        # skip silent "not configured"
-        if r.get("error") == "پیکربندی نشده" and not r.get("ok"):
+def list_available_chat_models() -> list:
+    """Configured providers for UI selector (no secret values)."""
+    items = []
+    builtins = [
+        ("openrouter", "OpenRouter", "openrouter_key", "OPENROUTER_API_KEY"),
+        ("openai", "OpenAI", "openai_key", "OPENAI_API_KEY"),
+        ("claude", "Claude", "anthropic_key", "ANTHROPIC_API_KEY"),
+        ("gemini", "Gemini", "gemini_key", "GEMINI_API_KEY"),
+        ("grok", "Grok", "xai_key", "XAI_API_KEY"),
+        ("groq", "Groq", "groq_key", "GROQ_API_KEY"),
+    ]
+    for pid, label, kkey, kenv in builtins:
+        if secret_get_chat(kkey, kenv):
+            items.append({"id": pid, "label": label, "kind": "model"})
+    for i in range(1, 11):
+        if secret_get_chat(f"custom_{i}_key", "") and secret_get_chat(f"custom_{i}_url", ""):
+            items.append({
+                "id": f"custom_{i}",
+                "label": secret_get_chat(f"custom_{i}_name", "") or f"سفارشی {i}",
+                "kind": "model",
+            })
+    items.append({"id": "kavosh", "label": "موتور کاوش", "kind": "engine"})
+    return items
+
+
+_WORD_RE = re.compile(r"[\w؀-ۿ]{3,}", re.UNICODE)
+_SENT_SPLIT_RE = re.compile(r"(?<=[\.\!\?؟۔…])\s+|\n+")
+
+
+def _clean_answer_text(text: str) -> str:
+    text = re.sub(r"```.*?```", " ", text or "", flags=re.S)
+    text = re.sub(r"[#*_>`]+", "", text)
+    return text.strip()
+
+
+def _sentences(text: str) -> list:
+    out = []
+    for part in _SENT_SPLIT_RE.split(_clean_answer_text(text)):
+        part = re.sub(r"^[\-•\d\.\)\s]+", "", part.strip())
+        if len(part) >= 25:
+            out.append(re.sub(r"\s+", " ", part))
+    return out
+
+
+def local_consensus_summary(answers: list, max_chars: int = 1100) -> str:
+    """خلاصه‌ساز محلی (بدون API): جمله‌هایی که چند مدل روی آن‌ها هم‌نظرند را انتخاب می‌کند."""
+    per_model = [_sentences(a) for a in answers]
+    tokens = [[set(_WORD_RE.findall(s.lower())) for s in sents] for sents in per_model]
+    scored = []
+    for mi, sents in enumerate(per_model):
+        for si, sent in enumerate(sents):
+            tk = tokens[mi][si]
+            if not tk:
+                continue
+            support = 0.0
+            for mj, other in enumerate(tokens):
+                if mj == mi or not other:
+                    continue
+                best = max((len(tk & o) / len(tk | o) for o in other if o), default=0.0)
+                support += best
+            score = support + (0.25 if si == 0 else 0) - si * 0.01
+            scored.append((score, mi, si, sent, tk))
+    scored.sort(key=lambda x: -x[0])
+    chosen, used = [], 0
+    for score, mi, si, sent, tk in scored:
+        if any(len(tk & c[3]) / max(1, min(len(tk), len(c[3]))) > 0.7 for c in chosen):
             continue
-        results.append(r)
+        if len(per_model) > 1 and chosen and score < 0.25:
+            continue  # جملهٔ تک‌مدلی و بی‌ارتباط با نظر بقیه
+        if used + len(sent) > max_chars and chosen:
+            continue
+        chosen.append((mi, si, sent, tk))
+        used += len(sent)
+        if used >= max_chars or len(chosen) >= 8:
+            break
+    # ترتیب طبیعی: همان ترتیبی که در مدل‌ها آمده
+    chosen.sort(key=lambda c: (c[0], c[1]))
+    return "\n".join("• " + c[2] for c in chosen).strip()
+
+
+def synthesize_answers(question: str, ok_list: list) -> str:
+    """یک پاسخ واحد و خلاصه از جواب چند مدل می‌سازد (اول با یک مدل داور، در غیر این صورت محلی)."""
+    answers = [r["answer"] for r in ok_list]
+    if len(answers) == 1:
+        return answers[0].strip()
+    # 1) مدل داور: اولین مدل غیرموتور که جواب داد
+    judge = next((r for r in ok_list if r.get("id") and r.get("id") != "kavosh"), None)
+    if judge:
+        blocks = []
+        for r in ok_list:
+            blocks.append(f"### پاسخ {r['name']}:\n{r['answer'][:2500]}")
+        prompt = (
+            "چند مدل به این پرسش پاسخ داده‌اند. از روی همهٔ آن‌ها فقط «یک پاسخ نهایی خلاصه و دقیق» بنویس.\n"
+            "قواعد: نکات مشترک را ادغام کن، تکرار را حذف کن، اگر اختلاف جدی بود در یک جمله بگو، "
+            "اسم مدل‌ها را نیاور، به زبان کاربر (معمولاً فارسی) و حداکثر حدود ۲۰۰ تا ۳۰۰ کلمه بنویس.\n\n"
+            f"پرسش: {question[:1500]}\n\n" + "\n\n".join(blocks)
+        )
+        msgs = [
+            {"role": "system", "content": "تو ویراستار و جمع‌بندی‌کنندهٔ پاسخ‌های چند مدل در «کاوش AI 2» هستی."},
+            {"role": "user", "content": prompt},
+        ]
+        try:
+            r = call_one_chat_provider(judge["id"], msgs, timeout=45)
+            if r.get("ok") and len(r.get("answer", "").strip()) > 40:
+                return r["answer"].strip()
+        except Exception:
+            pass
+    # 2) خلاصه‌ساز محلی
+    local = local_consensus_summary(answers)
+    if local:
+        return local
+    return answers[0].strip()[:1200]
+
+
+def run_multi_model_chat(messages: list, only: list | None = None) -> dict:
+    """همهٔ مدل‌های پیکربندی‌شده + موتور کاوش را موازی صدا می‌زند و یک پاسخ خلاصه برمی‌گرداند."""
+    from concurrent.futures import ThreadPoolExecutor
+    order = ["openrouter", "openai", "claude", "gemini", "grok", "groq"] + [f"custom_{i}" for i in range(1, 11)] + ["kavosh"]
+    if only is not None:
+        allow = set(only)
+        order = [n for n in order if n in allow]
+
+    def _one(n):
+        try:
+            r = call_one_chat_provider(n, messages, timeout=40)
+        except Exception as exc:
+            r = {"name": n, "ok": False, "answer": "", "error": str(exc)[:200]}
+        r["id"] = n
+        return r
+
+    with ThreadPoolExecutor(max_workers=max(1, min(8, len(order)))) as pool:
+        raw = list(pool.map(_one, order))
+    results = [r for r in raw if not (r.get("error") == "پیکربندی نشده" and not r.get("ok"))]
 
     ok_list = [r for r in results if r.get("ok") and r.get("answer")]
     if not ok_list:
         return {"ok": False, "results": results, "answer": ""}
 
-    # Build Kavosh synthesis from all successful answers
-    lines = [
-        "پاسخ ترکیبی موتور کاوش (جمع‌بندی چند مدل):",
-        "",
-    ]
-    # Prefer longer overlapping ideas: take first 2-3 answers condensed
-    for r in ok_list:
-        snippet = re.sub(r"\s+", " ", r["answer"]).strip()
-        if len(snippet) > 700:
-            snippet = snippet[:700] + "…"
-        lines.append(f"• از نگاه {r['name']}:")
-        lines.append(snippet)
-        lines.append("")
-    lines.append("— جمع‌بندی کاوش: نکات مشترک مدل‌ها را جدی بگیرید؛ اگر مدل‌ها اختلاف دارند، موضوع را با منبع درسی/معتبر بررسی کنید.")
-    synthesis = "\n".join(lines).strip()
+    question = ""
+    for m in reversed(messages):
+        if m.get("role") == "user":
+            question = m.get("content") or ""
+            break
+    synthesis = synthesize_answers(question, ok_list)
     return {"ok": True, "results": results, "answer": synthesis, "models_ok": [r["name"] for r in ok_list]}
 
 
+# ----------------------------------------------------------------------------
+# یادگیری موتور کاوش: پرسش + خلاصهٔ پاسخ → بافر → هر LEARN_INTERVAL ثانیه داخل فایل/پایگاه موتور
+# ----------------------------------------------------------------------------
 def ensure_learn_tables(conn) -> None:
     conn.executescript(
         """
@@ -409,6 +544,10 @@ def ensure_learn_tables(conn) -> None:
 
 
 def queue_learning(question: str, synthesis: str, sources: list) -> None:
+    question = (question or "").strip()
+    synthesis = (synthesis or "").strip()
+    if not question or not synthesis:
+        return
     with lock:
         conn = db()
         try:
@@ -420,11 +559,62 @@ def queue_learning(question: str, synthesis: str, sources: list) -> None:
             conn.commit()
         finally:
             conn.close()
-    maybe_flush_learning()
+
+
+def learn_safe(question: str, answer: str, sources: list | None = None) -> None:
+    """هر پاسخی که کاوش خلاصه کرد را در صف یادگیری می‌گذارد؛ خطا هرگز چت را خراب نمی‌کند."""
+    try:
+        queue_learning(question, answer, sources or [])
+    except Exception:
+        pass
+
+
+def _github_append_engine_file(new_text: str) -> str:
+    """متن جدید را به فایل موتور در گیت‌هاب اضافه می‌کند (اختیاری). خروجی: '' یا پیام خطا."""
+    if not (GITHUB_TOKEN and GITHUB_REPO):
+        return ""
+    import base64
+    from urllib.parse import quote
+    api = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{quote(GITHUB_ENGINE_PATH)}"
+    headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "KavoshAI2-engine",
+        "Content-Type": "application/json",
+    }
+    old_text, sha = "", None
+    try:
+        with urlopen(Request(f"{api}?ref={quote(GITHUB_BRANCH)}", headers=headers, method="GET"), timeout=20) as resp:
+            meta = json.loads(resp.read(5_000_000).decode("utf-8"))
+            sha = meta.get("sha")
+            old_text = base64.b64decode(meta.get("content", "") or "").decode("utf-8", errors="replace")
+    except HTTPError as exc:
+        if exc.code != 404:
+            return f"github get {exc.code}"
+    except Exception as exc:
+        return f"github get {str(exc)[:80]}"
+    full = (old_text + new_text)
+    if len(full) > 1_500_000:  # قدیمی‌ترین بخش را کوتاه کن
+        full = full[-1_500_000:]
+    payload = {
+        "message": "kavosh engine: learned Q&A",
+        "content": base64.b64encode(full.encode("utf-8")).decode("ascii"),
+        "branch": GITHUB_BRANCH,
+    }
+    if sha:
+        payload["sha"] = sha
+    try:
+        req = Request(api, data=json_bytes(payload), headers=headers, method="PUT")
+        with urlopen(req, timeout=30):
+            return ""
+    except HTTPError as exc:
+        return f"github put {exc.code}"
+    except Exception as exc:
+        return f"github put {str(exc)[:80]}"
 
 
 def maybe_flush_learning(force: bool = False) -> dict:
-    """Every 24h, merge buffered Q&A into knowledge base as a daily document."""
+    """هر LEARN_INTERVAL ثانیه (پیش‌فرض ۲ دقیقه): پرسش/خلاصه‌های بافر را به فایل و پایگاه دانش موتور اضافه می‌کند."""
     with lock:
         conn = db()
         try:
@@ -432,36 +622,56 @@ def maybe_flush_learning(force: bool = False) -> dict:
             row = conn.execute("SELECT value FROM learn_meta WHERE key='last_flush'").fetchone()
             last = int(row["value"]) if row and str(row["value"]).isdigit() else 0
             now = int(time.time())
-            if not force and last and (now - last) < 24 * 3600:
+            if not force and last and (now - last) < LEARN_INTERVAL:
                 return {"ok": True, "flushed": False, "reason": "not_yet"}
             rows = conn.execute(
-                "SELECT question, synthesis, sources, created_at FROM learn_buffer ORDER BY id ASC LIMIT 200"
+                "SELECT id, question, synthesis, sources, created_at FROM learn_buffer ORDER BY id ASC LIMIT 200"
             ).fetchall()
-            if not rows:
-                conn.execute(
-                    "INSERT INTO learn_meta(key,value) VALUES('last_flush',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-                    (str(now),),
-                )
-                conn.commit()
-                return {"ok": True, "flushed": False, "reason": "empty"}
-            parts = []
-            for r in rows:
-                parts.append(f"سؤال: {r['question']}\nپاسخ آموخته: {r['synthesis'][:3000]}\n")
-            content = "\n---\n".join(parts)
-            title = time.strftime("یادگیری روزانه کاوش %Y-%m-%d", time.localtime(now))
-            ensure_knowledge_tables(conn)
-            ensure_secrets_table(conn)
-            ensure_learn_tables(conn)
-            ingest_document(conn, title=title, content=content, source="کاوش/یادگیری-چندمدلی", lang="fa")
-            conn.execute("DELETE FROM learn_buffer")
             conn.execute(
                 "INSERT INTO learn_meta(key,value) VALUES('last_flush',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                 (str(now),),
             )
+            if not rows:
+                conn.commit()
+                return {"ok": True, "flushed": False, "reason": "empty"}
+            stamp = time.strftime("%Y-%m-%d %H:%M", time.localtime(now))
+            parts, md_parts = [], []
+            for r in rows:
+                parts.append(f"سؤال: {r['question']}\nپاسخ آموخته: {r['synthesis'][:3000]}\n")
+                md_parts.append(f"### سؤال\n{r['question']}\n\n**خلاصهٔ پاسخ:**\n{r['synthesis']}\n")
+            content = "\n---\n".join(parts)
+            ensure_knowledge_tables(conn)
+            ensure_secrets_table(conn)
+            ingest_document(conn, title=f"یادگیری کاوش {stamp}", content=content, source="کاوش/یادگیری-موتور", lang="fa")
+            last_id = rows[-1]["id"]
+            conn.execute("DELETE FROM learn_buffer WHERE id<=?", (last_id,))
             conn.commit()
-            return {"ok": True, "flushed": True, "count": len(rows)}
         finally:
             conn.close()
+    # بیرون از lock: نوشتن فایل موتور و (اختیاری) آپلود به گیت‌هاب
+    block = f"\n## {stamp}\n\n" + "\n".join(md_parts)
+    file_err = ""
+    try:
+        ENGINE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(ENGINE_FILE, "a", encoding="utf-8") as fh:
+            fh.write(block)
+    except Exception as exc:
+        file_err = str(exc)[:120]
+    gh_err = _github_append_engine_file(block)
+    return {"ok": True, "flushed": True, "count": len(rows), "fileError": file_err, "githubError": gh_err}
+
+
+def _learning_worker() -> None:
+    while True:
+        time.sleep(LEARN_INTERVAL)
+        try:
+            maybe_flush_learning(force=True)
+        except Exception as exc:
+            print("learning flush error:", str(exc)[:200])
+
+
+def start_learning_worker() -> None:
+    threading.Thread(target=_learning_worker, name="kavosh-learning", daemon=True).start()
 
 
 def media_config(kind):
@@ -1886,7 +2096,19 @@ class Handler(BaseHTTPRequestHandler):
                     conn.close()
             return self.send_json(200, {"ok": True, "notes": notes})
 
+        if path == "/api/chat/models":
+            return self.send_json(200, {
+                "ok": True,
+                "modes": [
+                    {"id": "multi", "label": "چندمدلی (همه)", "kind": "mode"},
+                    {"id": "multi_custom", "label": "چندمدلی شخصی", "kind": "mode"},
+                    {"id": "kavosh", "label": "موتور کاوش", "kind": "mode"},
+                ],
+                "models": list_available_chat_models(),
+            })
+
         if path == "/api/me":
+
             s = self.session()
             if not s:
                 return self.send_json(200, {"ok": True, "authenticated": False})
@@ -2748,7 +2970,19 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, {"ok": True, "message": "تنظیمات ذخیره شد."})
 
 
+        if path == "/api/chat/models":
+            return self.send_json(200, {
+                "ok": True,
+                "modes": [
+                    {"id": "multi", "label": "چندمدلی (همه)", "kind": "mode"},
+                    {"id": "multi_custom", "label": "چندمدلی شخصی", "kind": "mode"},
+                    {"id": "kavosh", "label": "موتور کاوش", "kind": "mode"},
+                ],
+                "models": list_available_chat_models(),
+            })
+
         if path == "/api/chat":
+
             if not self.rate_allowed(): return self.send_json(429, {"ok": False, "error": "درخواست‌ها خیلی زیاد شده‌اند؛ یک دقیقه بعد دوباره تلاش کن."})
             try:
                 body = self.read_json(); message = str(body.get("message", "")).strip()[:8000]
@@ -2773,6 +3007,7 @@ class Handler(BaseHTTPRequestHandler):
                 ] + [secret_get_chat(f"custom_{i}_key", "") for i in range(1, 11)]):
                     if want_search and search_results:
                         summary = summarize_web_results(message, search_results)
+                        learn_safe(message, summary, ["web-search"])
                         return self.send_json(200, {
                             "ok": True,
                             "answer": summary,
@@ -2781,6 +3016,8 @@ class Handler(BaseHTTPRequestHandler):
                         })
                     # Always produce an answer (knowledge → web → wiki → safe text)
                     ans = always_answer(message)
+                    if ans.get("provider") != "kavosh-always":
+                        learn_safe(message, ans.get("answer", ""), [ans.get("provider") or "kavosh"])
                     return self.send_json(200, ans)
                 hist = body.get("history", [])
                 if not isinstance(hist, list): hist = []
@@ -2839,21 +3076,53 @@ class Handler(BaseHTTPRequestHandler):
                         messages.append({"role": item["role"], "content": item["content"][:8000]})
                 messages.append({"role": "user", "content": message})
                 # Multi-model path: OpenRouter + OpenAI + Claude + Gemini + Grok (هر کدام که کلید دارد)
-                if MULTI_MODEL_CHAT:
-                    multi = run_multi_model_chat(messages)
-                    if multi.get("ok") and multi.get("answer"):
+                mode = str(body.get("mode") or body.get("chatMode") or "multi").strip().lower()
+                selected = body.get("models") or body.get("selectedModels") or []
+                if not isinstance(selected, list):
+                    selected = []
+                selected = [str(x).strip() for x in selected if str(x).strip()]
+
+                # --- mode: kavosh engine only ---
+                if mode in ("kavosh", "engine", "knowledge"):
+                    ans = always_answer(message)
+                    if search_results and not ans.get("answer"):
+                        ans = {"ok": True, "answer": summarize_web_results(message, search_results), "provider": "web-search-summary"}
+                    ans["mode"] = "kavosh"
+                    if ans.get("provider") != "kavosh-always":
+                        learn_safe(message, ans.get("answer", ""), [ans.get("provider") or "kavosh"])
+                    return self.send_json(200, ans)
+
+                # --- mode: single model ---
+                if mode not in ("multi", "multi_custom", "all") and mode not in ("", "auto"):
+                    single_id = mode
+                    if selected and len(selected) == 1:
+                        single_id = selected[0]
+                    one = call_one_chat_provider(single_id, messages, timeout=50)
+                    if one.get("ok") and one.get("answer"):
                         try:
-                            queue_learning(
-                                message,
-                                multi["answer"],
-                                multi.get("models_ok") or [],
-                            )
+                            queue_learning(message, one["answer"], [one.get("name") or single_id])
                         except Exception:
                             pass
+                        out = {"ok": True, "answer": one["answer"], "provider": one.get("name") or single_id, "mode": "single"}
+                        if search_results:
+                            out["searchResults"] = search_results
+                        return self.send_json(200, out)
+                    ans = always_answer(message)
+                    ans["note"] = f"مدل {single_id} پاسخ نداد؛ موتور کاوش جایگزین شد."
+                    ans["upstreamError"] = one.get("error")
+                    return self.send_json(200, ans)
+
+                # --- multi or multi_custom ---
+                only = selected if mode == "multi_custom" and selected else None
+                if MULTI_MODEL_CHAT or only is not None or True:
+                    multi = run_multi_model_chat(messages, only=only)
+                    if multi.get("ok") and multi.get("answer"):
+                        learn_safe(message, multi["answer"], multi.get("models_ok") or [])
                         out = {
                             "ok": True,
                             "answer": multi["answer"],
                             "provider": "kavosh-multi",
+                            "mode": mode,
                             "models": multi.get("models_ok") or [],
                             "modelDetails": [
                                 {"name": r.get("name"), "ok": r.get("ok"), "error": r.get("error")}
@@ -2863,9 +3132,8 @@ class Handler(BaseHTTPRequestHandler):
                         if search_results:
                             out["searchResults"] = search_results
                         return self.send_json(200, out)
-                    # multi failed entirely → always_answer
                     ans = always_answer(message)
-                    ans["note"] = "هیچ‌یک از مدل‌های پیکربندی‌شده پاسخ ندادند؛ موتور کاوش جایگزین شد."
+                    ans["note"] = "هیچ‌یک از مدل‌های انتخاب‌شده پاسخ ندادند؛ موتور کاوش جایگزین شد."
                     return self.send_json(200, ans)
 
                 status, data = call_json_api(
@@ -2898,6 +3166,8 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     init_db()
+    start_learning_worker()
+    print(f"Kavosh engine learning every {LEARN_INTERVAL}s -> {ENGINE_FILE}" + (f" + GitHub {GITHUB_REPO}@{GITHUB_BRANCH}" if GITHUB_TOKEN and GITHUB_REPO else ""))
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     print(f"{SITE_NAME} server listening on port {PORT}")
     print(f"DB: {DB_PATH}")
