@@ -132,6 +132,23 @@ background:linear-gradient(135deg,#6b8cff,#9b7dff);border:none;color:#fff;font-s
 @keyframes dots{0%,20%{content:'.'}40%{content:'..'}60%,100%{content:'…'}}
 .status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--muted)}
 .status-dot.on{background:var(--good);box-shadow:0 0 8px var(--good)}
+
+.thinking-live{
+  align-self:flex-end;max-width:92%;margin-top:10px;padding:14px 16px;border-radius:16px;
+  border:1px solid rgba(139,167,255,.35);
+  background:linear-gradient(135deg,rgba(139,167,255,.14),rgba(177,154,255,.1));
+  display:flex;align-items:center;gap:12px;font-size:14px;color:var(--text);
+}
+.thinking-live .spin{
+  width:22px;height:22px;border-radius:50%;flex-shrink:0;
+  border:2.5px solid rgba(139,167,255,.25);
+  border-top-color:var(--blue);
+  animation:kavoshSpin .7s linear infinite;
+}
+@keyframes kavoshSpin{to{transform:rotate(360deg)}}
+.thinking-live .t-text{font-weight:600}
+.thinking-live .t-sub{display:block;font-size:11px;color:var(--muted);font-weight:400;margin-top:2px}
+
 </style>
 </head>
 <body>
@@ -873,19 +890,18 @@ $('newChatBtn').addEventListener('click', () => {
   ensureConv(); renderMessages();
 });
 
-function showThinking(steps){
+function showThinking(){
   const box = $('messages');
   if (!box) return;
   let el = $('thinkingLive');
   if (!el) {
     el = document.createElement('div');
     el.id = 'thinkingLive';
-    el.className = 'thinking-box';
+    el.className = 'thinking-live';
+    el.setAttribute('aria-live', 'polite');
     box.appendChild(el);
   }
-  el.innerHTML = '<div class="th-title">روند فکر کاوش</div>' + steps.map((s,i) =>
-    `<div class="th-step ${s.on?'on':''}"><span class="th-dot"></span><span>${s.text}</span></div>`
-  ).join('');
+  el.innerHTML = '<div class="spin" aria-hidden="true"></div><div><span class="t-text">کاوش در حال تفکر است…</span><span class="t-sub">لطفاً صبر کنید</span></div>';
   box.scrollTop = box.scrollHeight;
 }
 function clearThinking(){
@@ -905,17 +921,7 @@ async function sendChat(){
   persistConv();
   $('sendBtn').disabled = true;
 
-  const steps = [
-    {text: 'خواندن سؤال…', on: true},
-    {text: 'بررسی دانش و منابع…', on: false},
-    {text: 'پرس‌وجو از مدل‌ها…', on: false},
-    {text: 'جمع‌بندی پاسخ…', on: false}
-  ];
-  showThinking(steps);
-  const tick = (i) => { if (steps[i]) { steps[i].on = true; showThinking(steps); } };
-  const t1 = setTimeout(() => tick(1), 400);
-  const t2 = setTimeout(() => tick(2), 1100);
-  const t3 = setTimeout(() => tick(3), 2200);
+  showThinking();
 
   const history = messages.filter(m => m.role==='user'||m.role==='assistant'||m.role==='bot')
     .slice(0, -1).map(m => ({role: m.role==='bot'?'assistant':m.role, content:m.content}));
@@ -930,7 +936,6 @@ async function sendChat(){
   } catch (e) {
     data = {ok:false, error: 'ارتباط با سرور برقرار نشد'};
   }
-  clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
   clearThinking();
   $('sendBtn').disabled = false;
   if (data.ok && data.answer) {
@@ -1122,15 +1127,24 @@ async function loadPlans(){
     {name:'الماس — ۵ سال', priceLabel:'۱۰٬۰۰۰٬۰۰۰ کاوش', features:['همه امکانات الماس','بلندمدت']},
   ];
   let plans = defaults;
+  let data = {};
   try {
-    const {data} = await api('/api/plans');
+    const res = await api('/api/plans');
+    data = res.data || {};
     if (data.ok && data.plans && data.plans.length) plans = data.plans;
   } catch(e){}
+  if (data && data.paymentCard) {
+    if ($('payHolder')) $('payHolder').textContent = data.paymentCard.holder || 'رادین محمدی ارباطی';
+    if ($('payCardNum')) $('payCardNum').textContent = data.paymentCard.formatted || data.paymentCard.number || '5022 2916 1527 5201';
+  }
   $('planCards').innerHTML = plans.map(p =>
     `<div class="card"><h3>${escapeHtml(p.name)}</h3><p style="font-size:18px;font-weight:700;background:linear-gradient(90deg,var(--blue),var(--violet));-webkit-background-clip:text;-webkit-text-fill-color:transparent">${escapeHtml(p.priceLabel||'')}</p>
      <p style="font-size:11px;color:var(--muted)">${p.durationDays? (p.durationDays+' روز') : ''}</p>
      <ul style="padding-right:18px;color:var(--muted)">${(p.features||[]).map(f=>'<li>'+escapeHtml(f)+'</li>').join('')}</ul>
-     <button class="btn btn-primary" type="button" data-plan-id="${escapeHtml(p.id||p.name)}" data-plan-name="${escapeHtml(p.name)}">ثبت درخواست خرید</button></div>`
+     <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
+       <button class="btn btn-primary" type="button" data-plan-id="${escapeHtml(p.id||p.name)}" data-plan-name="${escapeHtml(p.name)}" data-pay="card">پرداخت با کارت (واریز)</button>
+       <button class="btn btn-ghost" type="button" data-plan-id="${escapeHtml(p.id||p.name)}" data-plan-name="${escapeHtml(p.name)}" data-pay="kavosh">پرداخت با پول کاوش</button>
+     </div></div>`
   ).join('');
 }
 
@@ -1389,18 +1403,39 @@ async function loadPurchases(){
 document.addEventListener('click', async (ev) => {
   const btn = ev.target.closest('[data-plan-id]');
   if (!btn) return;
-  if (!token) { alert('ابتدا وارد شوید (پروفایل).'); showPage('profile'); return; }
+  if (!token && !user) { alert('ابتدا وارد شوید (پروفایل).'); showPage('profile'); return; }
+  const pay = btn.getAttribute('data-pay') || 'card';
   btn.disabled = true;
   const {data} = await api('/api/purchases', {
     method: 'POST',
-    body: JSON.stringify({ planId: btn.getAttribute('data-plan-id'), planName: btn.getAttribute('data-plan-name') })
+    body: JSON.stringify({
+      planId: btn.getAttribute('data-plan-id'),
+      planName: btn.getAttribute('data-plan-name'),
+      paymentMethod: pay
+    })
   });
   btn.disabled = false;
   if (data.ok) {
-    alert(data.message || ('درخواست ثبت شد: ' + (data.id||'')));
-    loadPurchases();
+    let msg = data.message || ('درخواست ثبت شد: ' + (data.id||''));
+    if (pay === 'card') {
+      const num = ($('payCardNum') && $('payCardNum').textContent) || '5022 2916 1527 5201';
+      const holder = ($('payHolder') && $('payHolder').textContent) || 'رادین محمدی ارباطی';
+      msg += '\n\nکارت: ' + num + '\nبه نام: ' + holder;
+    }
+    alert(msg);
+    if (typeof loadPurchases === 'function') loadPurchases();
   } else {
     alert(data.error || 'خطا');
+  }
+});
+
+$('copyCardBtn') && $('copyCardBtn').addEventListener('click', async () => {
+  const num = (($('payCardNum') && $('payCardNum').textContent) || '').replace(/\s+/g,'');
+  try {
+    await navigator.clipboard.writeText(num);
+    alert('شماره کارت کپی شد');
+  } catch(e) {
+    prompt('کپی کنید:', num);
   }
 });
 
