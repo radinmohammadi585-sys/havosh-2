@@ -2990,6 +2990,12 @@ class Handler(BaseHTTPRequestHandler):
                 math_answer = solve_math(message)
                 if math_answer: return self.send_json(200, {"ok": True, "answer": math_answer, "provider": "math"})
                 want_search = bool(body.get("webSearch") or body.get("search"))
+                mode = str(body.get("mode") or body.get("chatMode") or "multi").strip().lower()
+                selected = body.get("models") or body.get("selectedModels") or []
+                if not isinstance(selected, list):
+                    selected = []
+                selected = [str(x).strip() for x in selected if str(x).strip()]
+                is_single_request = mode not in ("multi", "multi_custom", "all", "", "auto", "kavosh", "engine", "knowledge")
                 search_results = []
                 search_error = ""
                 if want_search:
@@ -2997,26 +3003,14 @@ class Handler(BaseHTTPRequestHandler):
                         search_results = web_search(message, limit=5)
                     except RuntimeError as exc:
                         search_error = str(exc)[:300]
-                # Resolve the requested mode/selection before any local fallback.
-                mode = str(body.get("mode") or body.get("chatMode") or "multi").strip().lower()
-                selected = body.get("models") or body.get("selectedModels") or []
-                if not isinstance(selected, list):
-                    selected = []
-                selected = [str(x).strip() for x in selected if str(x).strip()]
-                multi_modes = ("multi", "multi_custom", "all")
-                explicit_kavosh = mode in ("kavosh", "engine", "knowledge")
-                selected_single_ai = len(selected) == 1 and selected[0].lower() != "kavosh"
-                mode_single_ai = mode not in multi_modes and mode not in ("", "auto", "kavosh", "engine", "knowledge")
-                single_ai_requested = selected_single_ai or mode_single_ai
-
-                if not any([
+                if not is_single_request and not any([
                     secret_get_chat("openrouter_key", "OPENROUTER_API_KEY"),
                     secret_get_chat("openai_key", "OPENAI_API_KEY"),
                     secret_get_chat("anthropic_key", "ANTHROPIC_API_KEY"),
                     secret_get_chat("gemini_key", "GEMINI_API_KEY"),
                     secret_get_chat("xai_key", "XAI_API_KEY"),
                     secret_get_chat("groq_key", "GROQ_API_KEY"),
-                ] + [secret_get_chat(f"custom_{i}_key", "") for i in range(1, 11)]) and not single_ai_requested:
+                ] + [secret_get_chat(f"custom_{i}_key", "") for i in range(1, 11)]):
                     if want_search and search_results:
                         summary = summarize_web_results(message, search_results)
                         learn_safe(message, summary, ["web-search"])
@@ -3089,7 +3083,7 @@ class Handler(BaseHTTPRequestHandler):
                 messages.append({"role": "user", "content": message})
                 # Multi-model path: OpenRouter + OpenAI + Claude + Gemini + Grok (هر کدام که کلید دارد)
                 # --- mode: kavosh engine only ---
-                if explicit_kavosh:
+                if mode in ("kavosh", "engine", "knowledge"):
                     ans = always_answer(message)
                     if search_results and not ans.get("answer"):
                         ans = {"ok": True, "answer": summarize_web_results(message, search_results), "provider": "web-search-summary"}
@@ -3098,10 +3092,11 @@ class Handler(BaseHTTPRequestHandler):
                         learn_safe(message, ans.get("answer", ""), [ans.get("provider") or "kavosh"])
                     return self.send_json(200, ans)
 
-                # --- mode: single AI model ---
-                # A single explicit selection takes priority even if the UI sent a multi mode.
-                if single_ai_requested:
-                    single_id = selected[0] if selected_single_ai else mode
+                # --- mode: single model ---
+                if mode not in ("multi", "multi_custom", "all") and mode not in ("", "auto"):
+                    single_id = mode
+                    if selected and len(selected) == 1:
+                        single_id = selected[0]
                     one = call_one_chat_provider(single_id, messages, timeout=50)
                     if one.get("ok") and one.get("answer"):
                         try:
@@ -3112,17 +3107,19 @@ class Handler(BaseHTTPRequestHandler):
                         if search_results:
                             out["searchResults"] = search_results
                         return self.send_json(200, out)
-                    # Never replace a failed single-provider request with Kavosh.
-                    out = {"ok": False, "error": f"مدل {single_id} پاسخ نداد.", "provider": one.get("name") or single_id, "mode": "single"}
-                    if one.get("error"):
-                        out["upstreamError"] = one.get("error")
-                    if search_results:
-                        out["searchResults"] = search_results
-                    return self.send_json(200, out)
+                    # Manual/single mode is strict: never substitute the Kavosh engine.
+                    # Preserve the selected provider's failure (or report an empty response).
+                    error = str(one.get("error") or "مدل پاسخ خالی برگرداند.")[:500]
+                    return self.send_json(502, {
+                        "ok": False,
+                        "error": error,
+                        "provider": one.get("name") or single_id,
+                        "mode": "single",
+                    })
 
                 # --- multi or multi_custom ---
                 only = selected if mode == "multi_custom" and selected else None
-                if MULTI_MODEL_CHAT or only is not None:
+                if MULTI_MODEL_CHAT or only is not None or True:
                     multi = run_multi_model_chat(messages, only=only)
                     if multi.get("ok") and multi.get("answer"):
                         learn_safe(message, multi["answer"], multi.get("models_ok") or [])
