@@ -12,6 +12,7 @@ from economy import (
     list_market, add_market_listing, list_shop, list_stocks, tick_stocks,
     list_banks, add_bank, list_classes, create_class, add_grade, list_grades,
     add_teacher_message, list_teacher_messages, set_teacher_name,
+    buy_class_package, get_package, find_class_by_code, list_books, ensure_package,
 )
 from knowledge.store import (
     ensure_knowledge_tables, ingest_document, search_chunks,
@@ -2565,7 +2566,25 @@ class Handler(BaseHTTPRequestHandler):
                 finally:
                     conn.close()
             return self.send_json(200, {"ok": True, "banks": items})
+        if path == "/api/class-books":
+            return self.send_json(200, {"ok": True, "books": list_books()})
+        if path == "/api/class-package":
+            s = self.session()
+            key = str((s or {}).get("role") or (s or {}).get("username") or "guest")
+            role = str((s or {}).get("role") or "")
+            staff = role == "owner" or role.startswith("teacher") or role.startswith("manager") or role.startswith("deputy")
+            with lock:
+                conn = db()
+                try:
+                    if staff:
+                        ensure_package(conn, key, is_staff=True)
+                        conn.commit()
+                    pkg = get_package(conn, key)
+                finally:
+                    conn.close()
+            return self.send_json(200, {"ok": True, "package": pkg, "price_kavosh": 399000, "price_toman": 3990000, "rooms_per_pack": 50, "staffAuto": staff})
         if path == "/api/classes":
+
             with lock:
                 conn = db()
                 try:
@@ -3358,6 +3377,36 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError as exc:
                 return self.send_json(400, {"ok": False, "error": str(exc)})
 
+        if path == "/api/class-package":
+            s = self.session()
+            if not s:
+                return self.send_json(401, {"ok": False, "error": "برای خرید پکیج وارد شوید."})
+            key = str(s.get("role") or s.get("username") or "guest")
+            with lock:
+                conn = db()
+                try:
+                    result = buy_class_package(conn, key)
+                    conn.commit()
+                finally:
+                    conn.close()
+            return self.send_json(200, result)
+
+        if path == "/api/classes/join":
+            try:
+                body = self.read_json(5_000)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+            code = str(body.get("code") or body.get("joinCode") or "")
+            with lock:
+                conn = db()
+                try:
+                    cls = find_class_by_code(conn, code)
+                finally:
+                    conn.close()
+            if not cls:
+                return self.send_json(404, {"ok": False, "error": "کد اتاق معتبر نیست."})
+            return self.send_json(200, {"ok": True, "class": cls})
+
         if path == "/api/classes":
             s = self.session()
             if not s:
@@ -3371,7 +3420,17 @@ class Handler(BaseHTTPRequestHandler):
                 with lock:
                     conn = db()
                     try:
-                        result = create_class(conn, role, tname, str(body.get("title") or ""), str(body.get("description") or ""), str(body.get("schedule") or ""), str(body.get("meetUrl") or body.get("meet_url") or ""))
+                        is_staff = role == "owner" or role.startswith("teacher") or role.startswith("manager") or role.startswith("deputy")
+                        result = create_class(
+                            conn, role, tname,
+                            str(body.get("title") or ""),
+                            str(body.get("description") or ""),
+                            str(body.get("schedule") or ""),
+                            str(body.get("meetUrl") or body.get("meet_url") or ""),
+                            str(body.get("classType") or body.get("class_type") or ""),
+                            str(body.get("bookId") or body.get("book_id") or ""),
+                            is_staff=is_staff,
+                        )
                         conn.commit()
                     finally:
                         conn.close()

@@ -81,7 +81,17 @@ def ensure_economy_tables(conn) -> None:
             schedule TEXT,
             status TEXT DEFAULT 'open',
             meet_url TEXT,
+            join_code TEXT,
+            class_type TEXT,
+            book_id TEXT,
             created_at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS class_packages (
+            user_key TEXT PRIMARY KEY,
+            rooms_total INTEGER NOT NULL,
+            rooms_used INTEGER NOT NULL DEFAULT 0,
+            source TEXT,
+            updated_at INTEGER NOT NULL
         );
         CREATE TABLE IF NOT EXISTS class_grades (
             id TEXT PRIMARY KEY,
@@ -103,6 +113,15 @@ def ensure_economy_tables(conn) -> None:
         );
         """
     )
+
+    try:
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(online_classes)").fetchall()]
+        for col, typ in [("join_code", "TEXT"), ("class_type", "TEXT"), ("book_id", "TEXT"), ("meet_url", "TEXT")]:
+            if col not in cols:
+                conn.execute(f"ALTER TABLE online_classes ADD COLUMN {col} {typ}")
+    except Exception:
+        pass
+
     # seed stocks if empty
     n = conn.execute("SELECT COUNT(*) AS c FROM stock_symbols").fetchone()["c"]
     if not n:
@@ -228,19 +247,150 @@ def list_classes(conn) -> list:
     return [dict(r) for r in conn.execute("SELECT * FROM online_classes ORDER BY created_at DESC LIMIT 100").fetchall()]
 
 
-def create_class(conn, teacher_key: str, teacher_name: str, title: str, description: str, schedule: str, meet_url: str = "") -> dict:
+def create_class(conn, teacher_key: str, teacher_name: str, title: str, description: str, schedule: str, meet_url: str = "", class_type: str = "", book_id: str = "", is_staff: bool = False) -> dict:
     title = (title or "").strip()[:120]
     if not title:
         raise ValueError("عنوان کلاس لازم است.")
+    ensure_package(conn, teacher_key, is_staff=is_staff)
+    row = conn.execute("SELECT rooms_total, rooms_used FROM class_packages WHERE user_key=?", (teacher_key,)).fetchone()
+    if row and int(row["rooms_used"]) >= int(row["rooms_total"]):
+        raise ValueError("سقف ساخت اتاق پر شده. پکیج ۵۰ اتاقه تهیه کنید.")
     cid = "CL-" + secrets.token_hex(4).upper()
-    meet = (meet_url or "").strip()[:500]
-    if not meet:
-        meet = f"https://meet.jit.si/Kavosh-{cid}"
+    join_code = secrets.token_hex(3).upper()
+    meet = (meet_url or "").strip()[:500] or f"https://meet.jit.si/Kavosh-{cid}"
     conn.execute(
-        "INSERT INTO online_classes (id, title, teacher_key, teacher_name, description, schedule, status, meet_url, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
-        (cid, title, teacher_key, (teacher_name or "")[:80], (description or "")[:2000], (schedule or "")[:200], "open", meet, int(time.time())),
+        "INSERT INTO online_classes (id, title, teacher_key, teacher_name, description, schedule, status, meet_url, join_code, class_type, book_id, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        (cid, title, teacher_key, (teacher_name or "")[:80], (description or "")[:2000], (schedule or "")[:200], "open", meet, join_code, (class_type or "")[:80], (book_id or "")[:80], int(time.time())),
     )
-    return {"ok": True, "id": cid, "meet_url": meet}
+    conn.execute(
+        "UPDATE class_packages SET rooms_used = rooms_used + 1, updated_at=? WHERE user_key=?",
+        (int(time.time()), teacher_key),
+    )
+    return {"ok": True, "id": cid, "meet_url": meet, "join_code": join_code}
+
+
+def ensure_package(conn, user_key: str, is_staff: bool = False) -> dict:
+    row = conn.execute("SELECT * FROM class_packages WHERE user_key=?", (user_key,)).fetchone()
+    now = int(time.time())
+    if is_staff:
+        if not row:
+            conn.execute(
+                "INSERT INTO class_packages (user_key, rooms_total, rooms_used, source, updated_at) VALUES (?,?,?,?,?)",
+                (user_key, 50, 0, "staff-auto", now),
+            )
+            return {"rooms_total": 50, "rooms_used": 0}
+        if int(row["rooms_total"]) < 50:
+            conn.execute(
+                "UPDATE class_packages SET rooms_total=50, source=?, updated_at=? WHERE user_key=?",
+                ("staff-auto", now, user_key),
+            )
+        return {"rooms_total": max(50, int(row["rooms_total"])), "rooms_used": int(row["rooms_used"])}
+    if not row:
+        conn.execute(
+            "INSERT INTO class_packages (user_key, rooms_total, rooms_used, source, updated_at) VALUES (?,?,?,?,?)",
+            (user_key, 0, 0, "none", now),
+        )
+        return {"rooms_total": 0, "rooms_used": 0}
+    return {"rooms_total": int(row["rooms_total"]), "rooms_used": int(row["rooms_used"])}
+
+
+def buy_class_package(conn, user_key: str) -> dict:
+    now = int(time.time())
+    row = conn.execute("SELECT * FROM class_packages WHERE user_key=?", (user_key,)).fetchone()
+    if row:
+        conn.execute(
+            "UPDATE class_packages SET rooms_total = rooms_total + 50, source=?, updated_at=? WHERE user_key=?",
+            ("purchase", now, user_key),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO class_packages (user_key, rooms_total, rooms_used, source, updated_at) VALUES (?,?,?,?,?)",
+            (user_key, 50, 0, "purchase", now),
+        )
+    row = conn.execute("SELECT * FROM class_packages WHERE user_key=?", (user_key,)).fetchone()
+    return {
+        "ok": True,
+        "rooms_total": int(row["rooms_total"]),
+        "rooms_used": int(row["rooms_used"]),
+        "price_kavosh": 399000,
+        "price_toman": 3990000,
+        "message": "پکیج ۵۰ اتاقه ثبت شد.",
+    }
+
+
+def get_package(conn, user_key: str) -> dict:
+    row = conn.execute("SELECT * FROM class_packages WHERE user_key=?", (user_key,)).fetchone()
+    if not row:
+        return {"rooms_total": 0, "rooms_used": 0, "source": "none"}
+    return {"rooms_total": int(row["rooms_total"]), "rooms_used": int(row["rooms_used"]), "source": row["source"] or ""}
+
+
+def find_class_by_code(conn, code: str):
+    code = (code or "").strip().upper()
+    if not code:
+        return None
+    row = conn.execute("SELECT * FROM online_classes WHERE upper(join_code)=? AND status='open'", (code,)).fetchone()
+    return dict(row) if row else None
+
+
+GRADE_BOOKS = [
+    # سال تحصیلی ۱۴۰۵–۱۴۰۶ — عناوین رسمی پایگاه کتاب‌های درسی (chap.sch.ir)
+    # پایه دوم
+    {"id": "201", "grade": 2, "code": "201", "year": "1405-1406", "title": "آموزش قرآن (دوم)"},
+    {"id": "202", "grade": 2, "code": "202", "year": "1405-1406", "title": "هدیه‌های آسمان (دوم)"},
+    {"id": "203", "grade": 2, "code": "203", "year": "1405-1406", "title": "فارسی (دوم)"},
+    {"id": "204", "grade": 2, "code": "204", "year": "1405-1406", "title": "نگارش فارسی (دوم)"},
+    {"id": "205", "grade": 2, "code": "205", "year": "1405-1406", "title": "ریاضی (دوم)"},
+    {"id": "206", "grade": 2, "code": "206", "year": "1405-1406", "title": "علوم تجربی (دوم)"},
+    # پایه سوم
+    {"id": "301", "grade": 3, "code": "301", "year": "1405-1406", "title": "آموزش قرآن (سوم)"},
+    {"id": "302", "grade": 3, "code": "302", "year": "1405-1406", "title": "هدیه‌های آسمان (سوم)"},
+    {"id": "303", "grade": 3, "code": "303", "year": "1405-1406", "title": "فارسی (سوم)"},
+    {"id": "304", "grade": 3, "code": "304", "year": "1405-1406", "title": "نگارش فارسی (سوم)"},
+    {"id": "305", "grade": 3, "code": "305", "year": "1405-1406", "title": "ریاضی (سوم)"},
+    {"id": "306", "grade": 3, "code": "306", "year": "1405-1406", "title": "علوم تجربی (سوم)"},
+    {"id": "307", "grade": 3, "code": "307", "year": "1405-1406", "title": "مطالعات اجتماعی (سوم)"},
+    # پایه چهارم
+    {"id": "401", "grade": 4, "code": "401", "year": "1405-1406", "title": "آموزش قرآن (چهارم)"},
+    {"id": "402", "grade": 4, "code": "402", "year": "1405-1406", "title": "هدیه‌های آسمان (چهارم)"},
+    {"id": "403", "grade": 4, "code": "403", "year": "1405-1406", "title": "فارسی (چهارم)"},
+    {"id": "404", "grade": 4, "code": "404", "year": "1405-1406", "title": "نگارش فارسی (چهارم)"},
+    {"id": "405", "grade": 4, "code": "405", "year": "1405-1406", "title": "ریاضی (چهارم)"},
+    {"id": "406", "grade": 4, "code": "406", "year": "1405-1406", "title": "علوم تجربی (چهارم)"},
+    {"id": "407", "grade": 4, "code": "407", "year": "1405-1406", "title": "مطالعات اجتماعی (چهارم)"},
+    {"id": "408", "grade": 4, "code": "408", "year": "1405-1406", "title": "کتاب کار آموزش خط تحریری (چهارم)"},
+    # پایه پنجم
+    {"id": "501", "grade": 5, "code": "501", "year": "1405-1406", "title": "آموزش قرآن (پنجم)"},
+    {"id": "502", "grade": 5, "code": "502", "year": "1405-1406", "title": "هدیه‌های آسمان (پنجم)"},
+    {"id": "503", "grade": 5, "code": "503", "year": "1405-1406", "title": "فارسی (پنجم)"},
+    {"id": "504", "grade": 5, "code": "504", "year": "1405-1406", "title": "نگارش فارسی (پنجم)"},
+    {"id": "505", "grade": 5, "code": "505", "year": "1405-1406", "title": "ریاضی (پنجم)"},
+    {"id": "506", "grade": 5, "code": "506", "year": "1405-1406", "title": "علوم تجربی (پنجم)"},
+    {"id": "507", "grade": 5, "code": "507", "year": "1405-1406", "title": "مطالعات اجتماعی (پنجم)"},
+    {"id": "508", "grade": 5, "code": "508", "year": "1405-1406", "title": "کتاب کار آموزش خط تحریری (پنجم)"},
+    # پایه ششم
+    {"id": "601", "grade": 6, "code": "601", "year": "1405-1406", "title": "آموزش قرآن (ششم)"},
+    {"id": "602", "grade": 6, "code": "602", "year": "1405-1406", "title": "هدیه‌های آسمان (ششم)"},
+    {"id": "603", "grade": 6, "code": "603", "year": "1405-1406", "title": "فارسی (ششم)"},
+    {"id": "604", "grade": 6, "code": "604", "year": "1405-1406", "title": "نگارش فارسی (ششم)"},
+    {"id": "605", "grade": 6, "code": "605", "year": "1405-1406", "title": "ریاضی (ششم)"},
+    {"id": "606", "grade": 6, "code": "606", "year": "1405-1406", "title": "علوم تجربی (ششم)"},
+    {"id": "607", "grade": 6, "code": "607", "year": "1405-1406", "title": "مطالعات اجتماعی (ششم)"},
+    {"id": "608", "grade": 6, "code": "608", "year": "1405-1406", "title": "کتاب کار آموزش خط تحریری (ششم)"},
+    {"id": "612", "grade": 6, "code": "612", "year": "1405-1406", "title": "تفکر و پژوهش (ششم)"},
+    {"id": "617", "grade": 6, "code": "617", "year": "1405-1406", "title": "کار و فناوری (ششم)"},
+]
+
+
+def list_books():
+    return list(GRADE_BOOKS)
+
+
+def book_by_id(book_id: str):
+    for b in GRADE_BOOKS:
+        if b["id"] == book_id or b.get("code") == book_id:
+            return b
+    return None
 
 
 def add_grade(conn, class_id: str, student_key: str, student_label: str, score: str, note: str, teacher_key: str) -> dict:
