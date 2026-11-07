@@ -7,6 +7,12 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 from pathlib import Path
 import sqlite3
+from economy import (
+    ensure_economy_tables, register_user, login_user,
+    list_market, add_market_listing, list_shop, list_stocks, tick_stocks,
+    list_banks, add_bank, list_classes, create_class, add_grade, list_grades,
+    add_teacher_message, list_teacher_messages, set_teacher_name,
+)
 from knowledge.store import (
     ensure_knowledge_tables, ingest_document, search_chunks,
     list_documents, create_purchase, list_purchases, update_purchase_status,
@@ -62,7 +68,7 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash").strip()
 XAI_API_KEY = os.getenv("XAI_API_KEY", "").strip()
 XAI_MODEL = os.getenv("XAI_MODEL", "grok-2-latest").strip()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant").strip()
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b").strip()
 MULTI_MODEL_CHAT = (os.getenv("MULTI_MODEL_CHAT", "1").strip().lower() in ("1", "true", "yes", "on"))
 # Outbound proxy for LLM APIs (region blocks). Examples:
 # PROXY_URL=socks5://127.0.0.1:1080   or  http://127.0.0.1:7890
@@ -809,6 +815,7 @@ def maybe_flush_learning(force: bool = False) -> dict:
                 md_parts.append(f"### سؤال\n{r['question']}\n\n**خلاصهٔ پاسخ:**\n{r['synthesis']}\n")
             content = "\n---\n".join(parts)
             ensure_knowledge_tables(conn)
+            ensure_economy_tables(conn)
             ensure_secrets_table(conn)
             ingest_document(conn, title=f"یادگیری کاوش {stamp}", content=content, source="کاوش/یادگیری-موتور", lang="fa")
             last_id = rows[-1]["id"]
@@ -2523,7 +2530,69 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(200); self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(body))); self.send_header("Cache-Control", "no-store")
             self.end_headers(); self.wfile.write(body); return
+        
+        if path == "/api/market":
+            with lock:
+                conn = db()
+                try:
+                    items = list_market(conn)
+                finally:
+                    conn.close()
+            return self.send_json(200, {"ok": True, "items": items})
+        if path == "/api/shop":
+            with lock:
+                conn = db()
+                try:
+                    items = list_shop(conn)
+                finally:
+                    conn.close()
+            return self.send_json(200, {"ok": True, "items": items})
+        if path == "/api/bourse":
+            with lock:
+                conn = db()
+                try:
+                    tick_stocks(conn)
+                    conn.commit()
+                    items = list_stocks(conn)
+                finally:
+                    conn.close()
+            return self.send_json(200, {"ok": True, "symbols": items, "note": "قیمت‌ها شبیه‌سازی آموزشی هستند؛ معامله واقعی نیست."})
+        if path == "/api/banks":
+            with lock:
+                conn = db()
+                try:
+                    items = list_banks(conn)
+                finally:
+                    conn.close()
+            return self.send_json(200, {"ok": True, "banks": items})
+        if path == "/api/classes":
+            with lock:
+                conn = db()
+                try:
+                    items = list_classes(conn)
+                finally:
+                    conn.close()
+            return self.send_json(200, {"ok": True, "classes": items})
+        if path.startswith("/api/classes/") and path.endswith("/grades"):
+            cid = path.split("/")[3] if len(path.split("/")) > 3 else ""
+            with lock:
+                conn = db()
+                try:
+                    items = list_grades(conn, cid)
+                finally:
+                    conn.close()
+            return self.send_json(200, {"ok": True, "grades": items})
+        if path == "/api/teacher-chat":
+            with lock:
+                conn = db()
+                try:
+                    items = list_teacher_messages(conn)
+                finally:
+                    conn.close()
+            return self.send_json(200, {"ok": True, "messages": items})
+
         return self.send_json(404, {"ok": False, "error": "مسیر پیدا نشد."})
+
     def do_POST(self):
         path = urlparse(self.path).path
         if path == "/api/panel/summary":
@@ -3148,6 +3217,219 @@ class Handler(BaseHTTPRequestHandler):
                 ],
                 "models": list_available_chat_models(),
             })
+
+
+        if path == "/api/auth/register":
+            if not self.rate_allowed():
+                return self.send_json(429, {"ok": False, "error": "درخواست زیاد است."})
+            try:
+                body = self.read_json(20_000)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+            u = str(body.get("username") or "")
+            p = str(body.get("password") or "")
+            p2 = str(body.get("password2") or body.get("passwordConfirm") or "")
+            if p != p2:
+                return self.send_json(400, {"ok": False, "error": "تکرار رمز عبور یکسان نیست."})
+            try:
+                with lock:
+                    conn = db()
+                    try:
+                        result = register_user(conn, u, p)
+                        conn.commit()
+                    finally:
+                        conn.close()
+                return self.send_json(200, result)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+
+        if path == "/api/auth/login-user":
+            if not self.rate_allowed():
+                return self.send_json(429, {"ok": False, "error": "درخواست زیاد است."})
+            try:
+                body = self.read_json(20_000)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+            try:
+                with lock:
+                    conn = db()
+                    try:
+                        row = login_user(conn, str(body.get("username") or ""), str(body.get("password") or ""))
+                    finally:
+                        conn.close()
+                token = secrets.token_urlsafe(32)
+                role = "user:" + row["username"]
+                need_name = bool(str(row.get("role") or "") == "teacher" or str(body.get("asTeacher") or "") == "1") and not (row.get("teacher_name") or "").strip()
+                with lock:
+                    sessions[token] = {"role": role, "created": time.time(), "last_seen": time.time(), "username": row["username"], "display_name": row.get("display_name") or row["username"], "teacher_name": row.get("teacher_name") or "", "user_id": row["id"]}
+                    # persist session like other logins if table exists
+                    try:
+                        conn = db()
+                        try:
+                            conn.execute(
+                                "INSERT OR REPLACE INTO sessions (token, role, created, last_seen) VALUES (?,?,?,?)",
+                                (token, role, time.time(), time.time()),
+                            )
+                            conn.commit()
+                        finally:
+                            conn.close()
+                    except Exception:
+                        pass
+                return self.send_json(200, {
+                    "ok": True,
+                    "token": token,
+                    "role": role,
+                    "username": row["username"],
+                    "display_name": row.get("display_name") or row["username"],
+                    "teacher_name": row.get("teacher_name") or "",
+                    "needTeacherName": need_name,
+                }, set_cookies=[(COOKIE_NAME, token, SESSION_TTL)])
+            except ValueError as exc:
+                return self.send_json(401, {"ok": False, "error": str(exc)})
+
+        if path == "/api/teacher/name":
+            s = self.session()
+            if not s:
+                return self.send_json(401, {"ok": False, "error": "ورود لازم است."})
+            try:
+                body = self.read_json(5_000)
+                name = str(body.get("name") or body.get("teacher_name") or "")
+                uname = str(s.get("username") or "").replace("user:", "")
+                if not uname and str(s.get("role") or "").startswith("user:"):
+                    uname = str(s["role"]).split(":", 1)[1]
+                if not uname:
+                    # staff teacher roles
+                    s["teacher_name"] = name.strip()[:80]
+                    s["display_name"] = s["teacher_name"]
+                    return self.send_json(200, {"ok": True, "teacher_name": s["teacher_name"]})
+                with lock:
+                    conn = db()
+                    try:
+                        result = set_teacher_name(conn, uname, name)
+                        conn.commit()
+                    finally:
+                        conn.close()
+                    s["teacher_name"] = result["teacher_name"]
+                    s["display_name"] = result["teacher_name"]
+                return self.send_json(200, result)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+
+        if path == "/api/market":
+            try:
+                body = self.read_json(30_000)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+            s = self.session()
+            seller_key = str(s.get("username") or s.get("role") or body.get("sellerName") or "guest")[:80] if s else str(body.get("sellerName") or "guest")[:80]
+            seller_name = str(body.get("sellerName") or (s or {}).get("display_name") or seller_key)[:80]
+            try:
+                with lock:
+                    conn = db()
+                    try:
+                        result = add_market_listing(
+                            conn, seller_key, seller_name,
+                            str(body.get("title") or ""),
+                            str(body.get("description") or ""),
+                            body.get("price"),
+                            str(body.get("currency") or "kavosh"),
+                        )
+                        conn.commit()
+                    finally:
+                        conn.close()
+                return self.send_json(200, result)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+
+        if path == "/api/banks":
+            s = self.session()
+            if not s or str(s.get("role") or "") != "owner":
+                return self.send_json(403, {"ok": False, "error": "فقط مالک می‌تواند بانک اضافه کند."})
+            try:
+                body = self.read_json(10_000)
+                with lock:
+                    conn = db()
+                    try:
+                        result = add_bank(conn, str(body.get("name") or ""), str(body.get("code") or ""), str(body.get("note") or ""))
+                        conn.commit()
+                    finally:
+                        conn.close()
+                return self.send_json(200, result)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+
+        if path == "/api/classes":
+            s = self.session()
+            if not s:
+                return self.send_json(401, {"ok": False, "error": "ورود لازم است."})
+            role = str(s.get("role") or "")
+            if not (role == "owner" or role.startswith("teacher") or role.startswith("manager") or role.startswith("user:")):
+                return self.send_json(403, {"ok": False, "error": "دسترسی کلاس ندارید."})
+            try:
+                body = self.read_json(20_000)
+                tname = str(s.get("teacher_name") or s.get("display_name") or s.get("username") or role)
+                with lock:
+                    conn = db()
+                    try:
+                        result = create_class(conn, role, tname, str(body.get("title") or ""), str(body.get("description") or ""), str(body.get("schedule") or ""), str(body.get("meetUrl") or body.get("meet_url") or ""))
+                        conn.commit()
+                    finally:
+                        conn.close()
+                return self.send_json(200, result)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+
+        if path == "/api/grades":
+            s = self.session()
+            if not s:
+                return self.send_json(401, {"ok": False, "error": "ورود لازم است."})
+            role = str(s.get("role") or "")
+            if not (role == "owner" or role.startswith("teacher") or role.startswith("manager")):
+                return self.send_json(403, {"ok": False, "error": "فقط معلم/مدیر می‌تواند نمره ثبت کند."})
+            try:
+                body = self.read_json(10_000)
+                with lock:
+                    conn = db()
+                    try:
+                        result = add_grade(
+                            conn,
+                            str(body.get("classId") or ""),
+                            str(body.get("studentKey") or body.get("student") or ""),
+                            str(body.get("studentLabel") or ""),
+                            str(body.get("score") or ""),
+                            str(body.get("note") or ""),
+                            role,
+                        )
+                        conn.commit()
+                    finally:
+                        conn.close()
+                return self.send_json(200, result)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+
+        if path == "/api/teacher-chat":
+            s = self.session()
+            if not s:
+                return self.send_json(401, {"ok": False, "error": "ورود لازم است."})
+            try:
+                body = self.read_json(20_000)
+                with lock:
+                    conn = db()
+                    try:
+                        result = add_teacher_message(
+                            conn,
+                            str(s.get("role") or s.get("username") or "user"),
+                            str(body.get("body") or body.get("message") or ""),
+                            str(body.get("classId") or ""),
+                            str(body.get("toKey") or ""),
+                        )
+                        conn.commit()
+                    finally:
+                        conn.close()
+                return self.send_json(200, result)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+
 
         if path == "/api/chat":
 
