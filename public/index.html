@@ -2170,101 +2170,107 @@ $('bankAddBtn') && $('bankAddBtn').addEventListener('click', async () => {
   if (data.ok) loadBanks();
 });
 
+
 async function loadClasses(){
   try {
-  const canTeach = user && (user.role==='owner' || (user.role||'').startsWith('teacher') || (user.role||'').startsWith('manager'));
-  if ($('classCreateBox')) $('classCreateBox').style.display = canTeach ? '' : 'none';
-  if ($('teacherNameGate') && user && user.needTeacherName) $('teacherNameGate').style.display = '';
-  const {data} = await api('/api/classes');
-  const box = $('classList');
-  const openSkyRoom = (c) => {
-    const meet = c.meet_url || ('https://meet.jit.si/Kavosh-' + c.id);
-    // Jitsi config: better classroom feel
-    const roomUrl = meet + (meet.includes('#') ? '' : '#') + (meet.includes('config.') ? '' : '');
-    const wrap = $('liveClassBox');
-    const ifr = $('liveEmbed');
-    const link = $('liveMeetLink');
-    if ($('skyRoomTitle')) $('skyRoomTitle').textContent = 'اتاق: ' + (c.title || c.id);
-    if ($('skyRoomId')) $('skyRoomId').textContent = 'شناسه: ' + (c.id || '');
-    if ($('skyRoomTeacher')) $('skyRoomTeacher').textContent = 'معلم: ' + (c.teacher_name || c.teacher_key || '');
-    if ($('skyInviteCode')) $('skyInviteCode').textContent = meet;
-    if (link) link.href = meet;
-    window.__skyMeetUrl = meet;
-    window.__skyClass = c;
-    if (wrap) wrap.style.display = '';
-    if (ifr) {
-      // userInfo display name
-      const dn = (user && (user.teacher_name || user.display_name || user.username || user.label)) || 'دانش‌آموز';
-      const u = meet + (meet.indexOf('#') >= 0 ? '&' : '#') + 'userInfo.displayName="' + encodeURIComponent(dn) + '"';
-      ifr.src = meet;
-    }
-    wrap && wrap.scrollIntoView({behavior:'smooth'});
-  };
-  if (box) {
-    box.innerHTML = (data.classes||[]).map(c => {
-      const meet = c.meet_url || ('https://meet.jit.si/Kavosh-' + c.id);
-      return `<div class="card sky-room" style="padding:14px">
-        <h3 style="margin-top:0">${escapeHtml(c.title)}</h3>
-        <p style="font-size:12px;color:var(--muted)">${escapeHtml(c.description||'')}</p>
-        <div class="sky-meta">
-          <span>معلم: ${escapeHtml(c.teacher_name||c.teacher_key||'')}</span>
-          <span>${escapeHtml(c.schedule||'زمان اعلام می‌شود')}</span>
-          <span>کد: ${escapeHtml(c.id)}</span>
-        </div>
-        <div class="sky-actions">
-          <button type="button" class="btn btn-primary" data-sky-join="${escapeHtml(c.id)}">ورود به اتاق کلاس</button>
-          <button type="button" class="btn" data-sky-invite="${escapeHtml(meet)}">کپی دعوت</button>
-          <a class="btn btn-ghost" href="${escapeHtml(meet)}" target="_blank" rel="noopener">لینک مستقیم</a>
-        </div>
-      </div>`;
-    }).join('') || '<div class="empty">هنوز کلاسی ساخته نشده. معلم می‌تواند کلاس بسازد.</div>';
-    const byId = {};
-    (data.classes||[]).forEach(c => { byId[c.id] = c; });
-    box.querySelectorAll('[data-sky-join]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const c = byId[btn.getAttribute('data-sky-join')];
-        if (c) openSkyRoom(c);
-      });
-    });
-    box.querySelectorAll('[data-sky-invite]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const u = btn.getAttribute('data-sky-invite');
-        try { await navigator.clipboard.writeText(u); alert('لینک دعوت کپی شد — برای دانش‌آموزان بفرستید'); }
-        catch(e) { prompt('لینک دعوت:', u); }
-      });
-    });
-  }
-  const {data: ch} = await api('/api/teacher-chat');
-  const cl = $('tchChatList');
-  if (cl) cl.innerHTML = (ch.messages||[]).map(m => {
-      const b = m.body || '';
-      if (b.startsWith('[صوت] data:audio')) {
-        const src = b.slice(6).trim();
-        return `<div style="padding:6px 0;border-bottom:1px solid var(--line)"><strong>${escapeHtml(m.from_key)}</strong>: <audio controls src="${src.replace(/"/g,'')}" style="max-width:100%;margin-top:6px"></audio></div>`;
+    const canTeach = user && (user.role==='owner' || (user.role||'').startsWith('teacher') || (user.role||'').startsWith('manager'));
+    if ($('classCreateBox')) $('classCreateBox').style.display = canTeach ? '' : 'none';
+    if ($('teacherNameGate') && user && user.needTeacherName) $('teacherNameGate').style.display = '';
+    const {data} = await api('/api/classes');
+    const box = $('classList');
+    const openSkyRoom = (c) => {
+      const meet = (c && c.meet_url) ? c.meet_url : ('https://meet.jit.si/Kavosh-' + (c && c.id ? c.id : 'room'));
+      const wrap = $('liveClassBox');
+      const ifr = $('liveEmbed');
+      const link = $('liveMeetLink');
+      if ($('skyRoomTitle')) $('skyRoomTitle').textContent = 'اتاق: ' + ((c && c.title) || (c && c.id) || '');
+      if ($('skyRoomId')) $('skyRoomId').textContent = 'شناسه: ' + ((c && c.id) || '');
+      if ($('skyRoomTeacher')) $('skyRoomTeacher').textContent = 'معلم: ' + ((c && (c.teacher_name || c.teacher_key)) || '');
+      if ($('skyInviteCode')) $('skyInviteCode').textContent = meet;
+      if (link) link.href = meet;
+      window.__skyMeetUrl = meet;
+      window.__skyClass = c;
+      if (wrap) wrap.style.display = '';
+      if (ifr) ifr.src = meet;
+      if (wrap) wrap.scrollIntoView({behavior:'smooth'});
+    };
+    if (box) {
+      const list = (data && data.classes) || [];
+      if (!list.length) {
+        box.innerHTML = '<div class="empty">هنوز کلاسی ساخته نشده. معلم می‌تواند کلاس بسازد.</div>';
+      } else {
+        const byId = {};
+        list.forEach(c => { byId[c.id] = c; });
+        box.innerHTML = list.map(c => {
+          const meet = c.meet_url || ('https://meet.jit.si/Kavosh-' + c.id);
+          return '<div class="card sky-room" style="padding:14px">'
+            + '<h3 style="margin-top:0">' + escapeHtml(c.title) + '</h3>'
+            + '<p style="font-size:12px;color:var(--muted)">' + escapeHtml(c.description||'') + '</p>'
+            + '<div class="sky-meta">'
+            + '<span>معلم: ' + escapeHtml(c.teacher_name||c.teacher_key||'') + '</span>'
+            + '<span>' + escapeHtml(c.schedule||'زمان اعلام می‌شود') + '</span>'
+            + '<span>کد: ' + escapeHtml(c.id) + '</span></div>'
+            + '<div class="sky-actions">'
+            + '<button type="button" class="btn btn-primary" data-sky-join="' + escapeHtml(c.id) + '">ورود به اتاق کلاس</button>'
+            + '<button type="button" class="btn" data-sky-invite="' + escapeHtml(meet) + '">کپی دعوت</button>'
+            + '<a class="btn btn-ghost" href="' + escapeHtml(meet) + '" target="_blank" rel="noopener">لینک مستقیم</a>'
+            + '</div></div>';
+        }).join('');
+        box.querySelectorAll('[data-sky-join]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const c = byId[btn.getAttribute('data-sky-join')];
+            if (c) openSkyRoom(c);
+          });
+        });
+        box.querySelectorAll('[data-sky-invite]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const u = btn.getAttribute('data-sky-invite');
+            try { await navigator.clipboard.writeText(u); alert('لینک دعوت کپی شد'); }
+            catch (e) { prompt('لینک دعوت:', u); }
+          });
+        });
       }
-      return `<div style="padding:6px 0;border-bottom:1px solid var(--line)"><strong>${escapeHtml(m.from_key)}</strong>: ${escapeHtml(b)}</div>`;
-    }).join('') || '<div class="empty">پیامی نیست</div>';
-}
-
+    }
+    const chRes = await api('/api/teacher-chat');
+    const ch = chRes.data || {};
+    const cl = $('tchChatList');
+    if (cl) {
+      const msgs = ch.messages || [];
+      if (!msgs.length) cl.innerHTML = '<div class="empty">پیامی نیست</div>';
+      else cl.innerHTML = msgs.map(m => {
+        const b = m.body || '';
+        if (b.indexOf('[صوت] data:audio') === 0) {
+          const src = b.slice(6).trim().replace(/"/g, '');
+          return '<div style="padding:6px 0;border-bottom:1px solid var(--line)"><strong>'
+            + escapeHtml(m.from_key) + '</strong>: <audio controls src="' + src + '" style="max-width:100%;margin-top:6px"></audio></div>';
+        }
+        return '<div style="padding:6px 0;border-bottom:1px solid var(--line)"><strong>'
+          + escapeHtml(m.from_key) + '</strong>: ' + escapeHtml(b) + '</div>';
+      }).join('');
+    }
   } catch (e) {
     console.error('loadClasses', e);
     const box = $('classList');
-    if (box) box.innerHTML = '<div class="alert err">خطا در بارگذاری کلاس‌ها. صفحه را تازه کنید یا دوباره Deploy کنید.</div>';
+    if (box) box.innerHTML = '<div class="alert err">خطا در بارگذاری کلاس‌ها</div>';
   }
 }
 
 function bindSkyRoomControls(){
-  $('skyCopyInvite') && $('skyCopyInvite').addEventListener('click', async () => {
-    const u = window.__skyMeetUrl || ($('skyInviteCode') && $('skyInviteCode').textContent) || '';
-    try { await navigator.clipboard.writeText(u); alert('لینک دعوت کپی شد'); } catch(e) { prompt('لینک:', u); }
+  const copyBtn = $('skyCopyInvite');
+  if (copyBtn) copyBtn.addEventListener('click', async () => {
+    const u = window.__skyMeetUrl || (($('skyInviteCode') && $('skyInviteCode').textContent) || '');
+    try { await navigator.clipboard.writeText(u); alert('لینک دعوت کپی شد'); }
+    catch (e) { prompt('لینک:', u); }
   });
-  $('skyJoinMic') && $('skyJoinMic').addEventListener('click', () => {
+  const joinBtn = $('skyJoinMic');
+  if (joinBtn) joinBtn.addEventListener('click', () => {
     const ifr = $('liveEmbed');
     const u = window.__skyMeetUrl;
     if (ifr && u) ifr.src = u;
-    alert('اگر مرورگر پرسید، اجازه میکروفون/دوربین را بدهید. دانش‌آموزان با همان لینک دعوت وارد همین اتاق می‌شوند.');
+    alert('اجازه میکروفون را در مرورگر تأیید کنید. دانش‌آموزان با لینک دعوت وارد همین اتاق می‌شوند.');
   });
-  $('skyCloseRoom') && $('skyCloseRoom').addEventListener('click', () => {
+  const closeBtn = $('skyCloseRoom');
+  if (closeBtn) closeBtn.addEventListener('click', () => {
     const wrap = $('liveClassBox');
     const ifr = $('liveEmbed');
     if (ifr) ifr.src = 'about:blank';
@@ -2272,6 +2278,7 @@ function bindSkyRoomControls(){
   });
 }
 bindSkyRoomControls();
+
 
 $('clCreateBtn') && $('clCreateBtn').addEventListener('click', async () => {
   const {data} = await api('/api/classes', {method:'POST', body: JSON.stringify({title:$('clTitle').value, description:$('clDesc').value, schedule:$('clSched').value})});
