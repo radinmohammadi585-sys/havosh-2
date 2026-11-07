@@ -172,6 +172,15 @@ background:linear-gradient(135deg,#6b8cff,#9b7dff);border:none;color:#fff;font-s
 .sky-invite{margin-top:12px;padding:12px;border-radius:12px;background:rgba(0,0,0,.25);border:1px dashed rgba(94,234,212,.35);font-size:13px}
 .sky-invite code{direction:ltr;display:inline-block;padding:2px 8px;background:rgba(139,167,255,.15);border-radius:6px}
 
+
+.class-hero{text-align:center;padding:28px 16px 18px;margin-bottom:16px;border-radius:22px;background:linear-gradient(145deg,rgba(30,60,120,.45),rgba(80,40,120,.35));border:1px solid rgba(139,167,255,.35)}
+.class-hero h2{margin:0;font-size:clamp(22px,4vw,34px);font-weight:800;letter-spacing:-.02em}
+.class-hero p{margin:10px auto 0;max-width:560px;color:var(--muted);font-size:14px;line-height:1.7}
+.pack-card{border:1px solid rgba(94,234,212,.4);background:linear-gradient(160deg,rgba(8,24,40,.9),rgba(20,12,36,.88));border-radius:20px;padding:18px}
+.pack-price{font-size:22px;font-weight:800;background:linear-gradient(90deg,var(--blue),var(--violet));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.join-box input{letter-spacing:2px;font-size:18px;text-align:center;direction:ltr}
+.code-pill{display:inline-block;direction:ltr;padding:6px 12px;border-radius:999px;background:rgba(139,167,255,.18);border:1px solid rgba(139,167,255,.4);font-weight:700;letter-spacing:1px}
+
 </style>
 </head>
 <body>
@@ -184,7 +193,7 @@ background:linear-gradient(135deg,#6b8cff,#9b7dff);border:none;color:#fff;font-s
       <div class="orb"></div>
       <div>
         <h1 data-i18n="brand">کاوش AI 2</h1>
-        <p style="font-size:10px;color:var(--muted)">UI: 2026-11-07-fix</p>
+        <p style="font-size:10px;color:var(--muted)">UI: 2026-11-07-STABLE</p>
         <p data-i18n="tagline">دستیار هوشمند فضایی</p>
       </div>
     <div id="uiVersion" style="font-size:11px;color:#5eead4;margin-top:6px;font-weight:700">نسخه UI: 2026-10-25-C · کاوش‌ویدیو+اخبار</div></div>
@@ -502,74 +511,115 @@ int main() {
       <div id="bankList" class="grid"></div>
     </section>
 
-    <section class="page" id="page-classes">
-      <h2 style="margin-top:0">کلاس‌های آنلاین</h2>
-      <p class="alert">فضای آموزشی برای معلمان و دانش‌آموزان. ثبت نمره و پیام با معلم.</p>
+        <section class="page" id="page-classes">
+      <div class="class-hero">
+        <h2>کلاس‌های آنلاین کاوش</h2>
+        <p>اتاق زنده با صدا، تصویر و اشتراک صفحه. معلم اتاق می‌سازد، کد می‌دهد، دانش‌آموز وارد می‌شود.</p>
+      </div>
+
+      <div class="grid" style="margin-bottom:16px">
+        <div class="pack-card">
+          <h3 style="margin-top:0">پکیج اتاق کلاس</h3>
+          <p class="pack-price">۳۹۹٬۰۰۰ کاوش</p>
+          <p style="font-size:13px;color:var(--muted)">یا <strong>۳٬۹۹۰٬۰۰۰ تومان</strong></p>
+          <ul style="font-size:13px;color:var(--muted);line-height:1.8;padding-right:18px">
+            <li>۵۰ اتاق قابل ساخت</li>
+            <li>کد ورود برای هر اتاق</li>
+            <li>صدا، تصویر و اشتراک صفحه نمایش</li>
+          </ul>
+          <p id="packStatus" style="font-size:13px;margin:10px 0">وضعیت پکیج: —</p>
+          <button type="button" class="btn btn-primary" id="buyPackBtn">ثبت پکیج ۵۰ اتاقه</button>
+          <p style="font-size:11px;color:var(--muted);margin-top:8px">مالک، مدیر و معلم به‌صورت خودکار پکیج دارند. پرداخت درگاه جدا است.</p>
+          <div id="packMsg"></div>
+        </div>
+
+        <div class="card join-box">
+          <h3 style="margin-top:0">ورود دانش‌آموز با کد اتاق</h3>
+          <p style="font-size:13px;color:var(--muted)">کدی که معلم داده را وارد کنید.</p>
+          <input type="text" id="joinCodeInput" placeholder="مثلاً A1B2C3" maxlength="12">
+          <button type="button" class="btn btn-primary" id="joinCodeBtn" style="margin-top:10px;width:100%">ورود به اتاق</button>
+          <div id="joinMsg" style="margin-top:8px"></div>
+        </div>
+      </div>
+
       <div id="teacherNameGate" class="card" style="display:none;margin-bottom:12px">
         <h3>نام نمایشی معلم</h3>
-        <p style="font-size:13px;color:var(--muted)">اولین ورود: لطفاً نام خود را وارد کنید.</p>
         <input type="text" id="teacherNameInput" placeholder="نام و نام خانوادگی">
-        <button class="btn btn-primary" type="button" id="teacherNameBtn">ذخیره نام</button>
+        <button class="btn btn-primary" type="button" id="teacherNameBtn">ذخیره</button>
         <div id="teacherNameMsg"></div>
       </div>
-      <div class="grid" style="margin-bottom:14px">
-        <div class="card" id="classCreateBox" style="display:none">
-          <h3>ایجاد کلاس</h3>
-          <label>عنوان <input type="text" id="clTitle"></label>
+
+      <div class="card" id="classCreateBox" style="display:none;margin-bottom:14px">
+        <h3 style="margin-top:0">ساخت اتاق کلاس (معلم)</h3>
+        <div class="form-grid">
+          <label>عنوان کلاس <input type="text" id="clTitle" placeholder="مثلاً ریاضی پنجم"></label>
+          <label>نوع کلاس
+            <select id="clType">
+              <option value="عمومی">عمومی</option>
+              <option value="تدریس">تدریس</option>
+              <option value="حل تمرین">حل تمرین</option>
+              <option value="آزمون">آزمون</option>
+              <option value="مشاوره">مشاوره</option>
+            </select>
+          </label>
+          <label>کتاب درسی (جلد ۱۴۰۵–۱۴۰۶ — پایه دوم تا ششم)
+            <select id="clBook"><option value="">— انتخاب کتاب رسمی —</option></select>
+          </label>
+          <p style="font-size:11px;color:var(--muted);margin:0">منبع عناوین: پایگاه کتاب‌های درسی chap.sch.ir · PDF رسمی از همان سایت</p>
+          <label>زمان‌بندی <input type="text" id="clSched" placeholder="شنبه‌ها ۱۸:۰۰"></label>
           <label>توضیح <textarea id="clDesc" rows="2"></textarea></label>
-          <label>زمان‌بندی <input type="text" id="clSched" placeholder="مثلاً شنبه‌ها ۱۸:۰۰"></label>
-          <button class="btn btn-primary" type="button" id="clCreateBtn">ایجاد</button>
+          <button class="btn btn-primary" type="button" id="clCreateBtn">ساخت اتاق + کد</button>
           <div id="clMsg"></div>
         </div>
-        <div class="card">
-          <h3>ثبت نمره</h3>
-          <label>شناسه کلاس <input type="text" id="grClassId"></label>
-          <label>شناسه/نام دانش‌آموز <input type="text" id="grStudent"></label>
-          <label>نمره <input type="text" id="grScore"></label>
-          <label>یادداشت <input type="text" id="grNote"></label>
-          <button class="btn" type="button" id="grBtn">ارسال نمره</button>
-          <div id="grMsg"></div>
-        </div>
-        <div class="card">
-          <h3>چت با معلم‌ها</h3>
-          <textarea id="tchChatInput" rows="2" placeholder="پیام…"></textarea>
-          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
-            <button class="btn btn-primary" type="button" id="tchChatBtn">ارسال متن</button>
-            <button class="btn" type="button" id="tchMicBtn">🎙 پیام صوتی</button>
-            <span id="tchMicStatus" style="font-size:12px;color:var(--muted);align-self:center"></span>
-          </div>
-          <div id="tchChatList" style="margin-top:10px;max-height:220px;overflow:auto"></div>
-        </div>
-        </div>
       </div>
+
       <div class="sky-room" id="liveClassBox" style="display:none">
         <h3 id="skyRoomTitle">اتاق کلاس زنده</h3>
-        <p style="font-size:13px;color:var(--muted);margin:0">معلم دعوت می‌کند؛ دانش‌آموزان با لینک وارد می‌شوند. صدا و تصویر از طریق اتاق امن مرورگر (Jitsi).</p>
         <div class="sky-meta">
           <span id="skyRoomId">شناسه: —</span>
           <span id="skyRoomTeacher">معلم: —</span>
-          <span>وضعیت: زنده</span>
+          <span id="skyRoomCode">کد: —</span>
         </div>
+        <p style="font-size:12px;color:var(--muted)">در اتاق می‌توانید میکروفون، دوربین و <strong>اشتراک صفحه</strong> (کامپیوتر یا گوشی) را روشن کنید.</p>
         <div class="sky-stage" id="liveEmbedWrap">
           <iframe id="liveEmbed" allow="camera; microphone; fullscreen; display-capture; autoplay" title="اتاق کلاس کاوش"></iframe>
         </div>
         <div class="sky-actions">
-          <button type="button" class="btn btn-primary" id="skyJoinMic">🎙 ورود با میکروفون</button>
-          <button type="button" class="btn" id="skyCopyInvite">کپی لینک دعوت</button>
-          <a class="btn btn-ghost" id="liveMeetLink" href="#" target="_blank" rel="noopener">باز در تب جدید</a>
-          <button type="button" class="btn btn-ghost" id="skyCloseRoom">بستن اتاق در صفحه</button>
+          <button type="button" class="btn btn-primary" id="skyJoinMic">🎙 ورود صوتی / تصویری</button>
+          <button type="button" class="btn" id="skyCopyInvite">کپی لینک</button>
+          <button type="button" class="btn" id="skyCopyCode">کپی کد اتاق</button>
+          <a class="btn btn-ghost" id="liveMeetLink" href="#" target="_blank" rel="noopener">تب جدید</a>
+          <button type="button" class="btn btn-ghost" id="skyCloseRoom">بستن</button>
         </div>
         <div class="sky-invite" id="skyInviteBox">
-          <strong>دعوت دانش‌آموزان:</strong>
-          لینک را برای کلاس بفرستید.
-          <div style="margin-top:8px"><code id="skyInviteCode">—</code></div>
-          <p style="margin:8px 0 0;font-size:12px;color:var(--muted)">دانش‌آموز روی لینک بزند → نام خود را وارد کند → اجازه میکروفون بدهد. معلم از همان اتاق می‌تواند شرکت‌کنندگان را ببیند و صدا را مدیریت کند.</p>
+          <strong>دعوت:</strong> لینک یا کد را برای دانش‌آموز بفرستید.
+          <div style="margin-top:8px">کد: <span class="code-pill" id="skyInviteCode">—</span></div>
         </div>
       </div>
 
-      </div>
+      <h3 style="margin-top:18px">اتاق‌های فعال</h3>
       <div id="classList" class="grid"></div>
+
+      <div class="card" style="margin-top:16px">
+        <h3>نمره و پیام</h3>
+        <div class="form-grid">
+          <label>شناسه کلاس <input type="text" id="grClassId"></label>
+          <label>دانش‌آموز <input type="text" id="grStudent"></label>
+          <label>نمره <input type="text" id="grScore"></label>
+          <label>یادداشت <input type="text" id="grNote"></label>
+          <button class="btn" type="button" id="grBtn">ثبت نمره</button>
+          <div id="grMsg"></div>
+        </div>
+        <textarea id="tchChatInput" rows="2" placeholder="پیام به معلمان…"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" type="button" id="tchChatBtn">ارسال متن</button>
+          <button class="btn" type="button" id="tchMicBtn">🎙 پیام صوتی</button>
+          <span id="tchMicStatus" style="font-size:12px;color:var(--muted)"></span>
+        </div>
+        <div id="tchChatList" style="margin-top:10px;max-height:200px;overflow:auto"></div>
+      </div>
     </section>
+
 
         <section class="page" id="page-subs">
       <h2 style="margin-top:0">اشتراک‌ها</h2>
@@ -687,7 +737,7 @@ int main() {
         <div class="card"><h3>ورود / حساب</h3><p>برای پیگیری درخواست‌ها وارد شوید.</p><button class="btn" type="button" data-goto="profile">پروفایل</button></div>
       </div>
       <h3>درخواست‌های خرید من</h3>
-      <div id="myPurchases" class="empty">وارد شوید تا درخواست‌ها نمایش داده شود.</div>
+      <div id="myPurchases2" class="empty">وارد شوید تا درخواست‌ها نمایش داده شود.</div>
     </section>
 
     <section class="page" id="page-knowledge">
@@ -759,6 +809,7 @@ int main() {
 
 <script>
 (function(){
+window.onerror = function(msg,src,line){ console.error("KavoshUI", msg, line); };
 const $ = id => document.getElementById(id);
 const TOKEN_KEY = 'kavosh_token';
 const LANG_KEY = 'kavosh_lang';
@@ -869,7 +920,7 @@ function setTheme(th){
   localStorage.setItem(THEME_KEY, th);
 }
 setTheme(localStorage.getItem(THEME_KEY) || 'dark');
-$('themeBtn').addEventListener('click', () => {
+if ($('themeBtn')) $('themeBtn').addEventListener('click', () => {
   const cur = document.documentElement.getAttribute('data-theme');
   setTheme(cur === 'light' ? 'dark' : 'light');
 });
@@ -877,36 +928,53 @@ $('themeBtn').addEventListener('click', () => {
 /* nav */
 function showPage(id){
   try {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p => { p.classList.remove('active'); p.style.display = ''; });
     document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
     const page = document.getElementById('page-' + id);
-    if (page) {
-      page.classList.add('active');
-      page.style.display = 'block';
-    }
+    if (page) { page.classList.add('active'); page.style.display = 'block'; }
+    else { const home = document.getElementById('page-home'); if (home) { home.classList.add('active'); home.style.display = 'block'; } }
     const btn = document.querySelector('.nav button[data-page="'+id+'"]');
     if (btn) btn.classList.add('active');
     const sb = document.getElementById('sidebar');
     if (sb) sb.classList.remove('open');
-    if (id === 'admin' && typeof loadAdminWithPurchases === 'function') loadAdminWithPurchases();
-    if (id === 'subs' && typeof loadPlans === 'function') loadPlans();
-    if (id === 'news' && typeof loadNews === 'function') loadNews();
-    if (id === 'channel' && typeof loadChannel === 'function') loadChannel();
-    if (id === 'contests' && typeof loadContests === 'function') loadContests();
-    if (id === 'tickets' && typeof renderTickets === 'function') renderTickets();
-    if (id === 'notifs' && typeof loadNotifs === 'function') loadNotifs();
-    if (id === 'chat') { if (typeof renderMessages==='function') renderMessages(); if (typeof refreshMemory==='function') refreshMemory(); if (typeof loadChatModels==='function') loadChatModels(); }
-    if (id === 'bourse' && typeof loadBourse === 'function') loadBourse();
-    if (id === 'market' && typeof loadMarket === 'function') loadMarket();
-    if (id === 'shop' && typeof loadShop === 'function') loadShop();
-    if (id === 'bank' && typeof loadBanks === 'function') loadBanks();
-    if (id === 'classes' && typeof loadClasses === 'function') loadClasses();
+    const loaders = {
+      admin: 'loadAdminWithPurchases', subs: 'loadPlans', news: 'loadNews', channel: 'loadChannel',
+      contests: 'loadContests', tickets: 'renderTickets', notifs: 'loadNotifs',
+      bourse: 'loadBourse', market: 'loadMarket', shop: 'loadShop', bank: 'loadBanks', classes: 'loadClasses'
+    };
+    if (id === 'chat') {
+      if (typeof renderMessages === 'function') renderMessages();
+      if (typeof refreshMemory === 'function') refreshMemory();
+      if (typeof loadChatModels === 'function') loadChatModels();
+    }
+    const fn = loaders[id];
+    if (fn && typeof window[fn] === 'function') {
+      try { const r = window[fn](); if (r && r.catch) r.catch(()=>{}); } catch(e) { console.error(fn, e); }
+    } else if (fn && typeof eval(fn) === 'function') {
+      try { eval(fn + '()'); } catch(e) {}
+    }
+    // direct calls for non-global functions
+    try {
+      if (id === 'admin' && typeof loadAdminWithPurchases === 'function') loadAdminWithPurchases();
+      if (id === 'subs' && typeof loadPlans === 'function') loadPlans();
+      if (id === 'news' && typeof loadNews === 'function') loadNews();
+      if (id === 'channel' && typeof loadChannel === 'function') loadChannel();
+      if (id === 'contests' && typeof loadContests === 'function') loadContests();
+      if (id === 'tickets' && typeof renderTickets === 'function') renderTickets();
+      if (id === 'notifs' && typeof loadNotifs === 'function') loadNotifs();
+      if (id === 'bourse' && typeof loadBourse === 'function') loadBourse();
+      if (id === 'market' && typeof loadMarket === 'function') loadMarket();
+      if (id === 'shop' && typeof loadShop === 'function') loadShop();
+      if (id === 'bank' && typeof loadBanks === 'function') loadBanks();
+      if (id === 'classes' && typeof loadClasses === 'function') loadClasses();
+    } catch (e) { console.error('page loaders', e); }
   } catch (e) { console.error('showPage', e); }
 }
+
 document.querySelectorAll('.nav button[data-page]').forEach(b => {
   b.addEventListener('click', () => showPage(b.dataset.page));
 });
-if ($('menuBtn') && $('sidebar')) $('menuBtn').addEventListener('click', () => $('sidebar').classList.toggle('open'));
+if ($('menuBtn') && $('sidebar')) if ($('menuBtn')) $('menuBtn').addEventListener('click', () => $('sidebar').classList.toggle('open'));
 
 /* API helper */
 async function api(path, opts = {}){
@@ -1166,7 +1234,7 @@ $('clearMsgsBtn') && $('clearMsgsBtn').addEventListener('click', () => {
   renderMessages();
   persistConv();
 });
-$('newChatBtn').addEventListener('click', () => {
+if ($('newChatBtn')) $('newChatBtn').addEventListener('click', () => {
   currentConv = null; messages = [];
   ensureConv(); renderMessages();
 });
@@ -1356,13 +1424,13 @@ async function createTextFile(filename, content){
   return {ok:false, error: data.error || ('خطا ' + status)};
 }
 
-$('sendBtn').addEventListener('click', sendChat);
-$('chatInput').addEventListener('keydown', e => {
+if ($('sendBtn')) $('sendBtn').addEventListener('click', sendChat);
+if ($('chatInput')) $('chatInput').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
 });
 
 /* image */
-$('imgGenBtn').addEventListener('click', async () => {
+if ($('imgGenBtn')) $('imgGenBtn').addEventListener('click', async () => {
   const prompt = $('imgPrompt').value.trim();
   if (!prompt) return;
   $('imgResult').innerHTML = '<div class="alert loading">در حال ارسال…</div>';
@@ -1380,7 +1448,7 @@ $('imgGenBtn').addEventListener('click', async () => {
 });
 
 /* video */
-$('vidGenBtn').addEventListener('click', async () => {
+if ($('vidGenBtn')) $('vidGenBtn').addEventListener('click', async () => {
   const prompt = $('vidPrompt').value.trim();
   if (!prompt) return;
   $('vidResult').innerHTML = '<div class="alert loading">در حال ساخت ویدئو (ممکن است تا ۲ دقیقه طول بکشد)…</div>';
@@ -1406,7 +1474,7 @@ $('vidGenBtn').addEventListener('click', async () => {
 function getTickets(){ try{return JSON.parse(localStorage.getItem(LOCAL_TICKETS)||'[]');}catch(e){return[]} }
 function setTickets(t){ localStorage.setItem(LOCAL_TICKETS, JSON.stringify(t)); }
 
-$('ticketSubmit').addEventListener('click', async () => {
+if ($('ticketSubmit')) $('ticketSubmit').addEventListener('click', async () => {
   const subject = $('ticketSubject').value.trim();
   const category = $('ticketCat').value;
   const description = $('ticketDesc').value.trim();
@@ -1458,7 +1526,7 @@ async function loadContests(filter){
 }
 document.querySelectorAll('[data-cf]').forEach(b => b.addEventListener('click', () => loadContests(b.dataset.cf)));
 
-$('cCreate').addEventListener('click', async () => {
+if ($('cCreate')) $('cCreate').addEventListener('click', async () => {
   const title = $('cTitle').value.trim();
   const description = $('cDesc').value.trim();
   const rules = $('cRules').value.trim();
@@ -1804,7 +1872,7 @@ $('searchOnlyBtn') && $('searchOnlyBtn').addEventListener('click', async () => {
 });
 
 
-$('adminLoginBtn').addEventListener('click', async () => {
+if ($('adminLoginBtn')) $('adminLoginBtn').addEventListener('click', async () => {
   const password = $('adminPass').value;
   $('adminLoginMsg').textContent = '…';
   const {status, data} = await api('/api/auth/login', {method:'POST', body: JSON.stringify({role: ($('adminLoginRole')&&$('adminLoginRole').value)||'owner', password})});
@@ -2226,83 +2294,106 @@ $('bankAddBtn') && $('bankAddBtn').addEventListener('click', async () => {
 });
 
 
+
+async function loadClassBooks(){
+  const sel = $('clBook');
+  if (!sel || sel.options.length > 1) return;
+  try {
+    const {data} = await api('/api/class-books');
+    (data.books || []).forEach(b => {
+      const o = document.createElement('option');
+      o.value = b.id;
+      o.textContent = 'پایه ' + b.grade + ' | ' + b.title + ' | جلد ' + (b.year || '1405-1406') + (b.code ? ' | کد ' + b.code : '');
+      sel.appendChild(o);
+    });
+  } catch(e) {}
+}
+
+async function loadClassPackage(){
+  const st = $('packStatus');
+  try {
+    const {data} = await api('/api/class-package');
+    if (!data.ok) { if (st) st.textContent = 'وضعیت پکیج: —'; return; }
+    const p = data.package || {};
+    const left = Math.max(0, (p.rooms_total||0) - (p.rooms_used||0));
+    if (st) st.textContent = 'اتاق‌ها: ' + (p.rooms_used||0) + ' از ' + (p.rooms_total||0) + ' (باقی‌مانده ' + left + ')' + (data.staffAuto ? ' · پکیج کارکنان فعال' : '');
+  } catch(e) { if (st) st.textContent = 'وضعیت پکیج: خطا'; }
+}
+
 async function loadClasses(){
   try {
-    const canTeach = user && (user.role==='owner' || (user.role||'').startsWith('teacher') || (user.role||'').startsWith('manager'));
+    const canTeach = user && (user.role==='owner' || (user.role||'').startsWith('teacher') || (user.role||'').startsWith('manager') || (user.role||'').startsWith('deputy'));
     if ($('classCreateBox')) $('classCreateBox').style.display = canTeach ? '' : 'none';
     if ($('teacherNameGate') && user && user.needTeacherName) $('teacherNameGate').style.display = '';
+    await loadClassBooks();
+    await loadClassPackage();
     const {data} = await api('/api/classes');
     const box = $('classList');
     const openSkyRoom = (c) => {
-      const meet = (c && c.meet_url) ? c.meet_url : ('https://meet.jit.si/Kavosh-' + (c && c.id ? c.id : 'room'));
-      const wrap = $('liveClassBox');
-      const ifr = $('liveEmbed');
-      const link = $('liveMeetLink');
-      if ($('skyRoomTitle')) $('skyRoomTitle').textContent = 'اتاق: ' + ((c && c.title) || (c && c.id) || '');
+      const meet = (c && c.meet_url) ? c.meet_url : ('https://meet.jit.si/Kavosh-' + ((c && c.id) || 'room'));
+      const code = (c && c.join_code) || '';
+      if ($('skyRoomTitle')) $('skyRoomTitle').textContent = 'اتاق: ' + ((c && c.title) || '');
       if ($('skyRoomId')) $('skyRoomId').textContent = 'شناسه: ' + ((c && c.id) || '');
       if ($('skyRoomTeacher')) $('skyRoomTeacher').textContent = 'معلم: ' + ((c && (c.teacher_name || c.teacher_key)) || '');
-      if ($('skyInviteCode')) $('skyInviteCode').textContent = meet;
-      if (link) link.href = meet;
+      if ($('skyRoomCode')) $('skyRoomCode').textContent = 'کد: ' + code;
+      if ($('skyInviteCode')) $('skyInviteCode').textContent = code || meet;
+      if ($('liveMeetLink')) $('liveMeetLink').href = meet;
       window.__skyMeetUrl = meet;
+      window.__skyJoinCode = code;
       window.__skyClass = c;
-      if (wrap) wrap.style.display = '';
-      if (ifr) ifr.src = meet;
-      if (wrap) wrap.scrollIntoView({behavior:'smooth'});
+      if ($('liveClassBox')) $('liveClassBox').style.display = '';
+      if ($('liveEmbed')) $('liveEmbed').src = meet;
+      if ($('liveClassBox')) $('liveClassBox').scrollIntoView({behavior:'smooth'});
     };
+    window.__openSkyRoom = openSkyRoom;
     if (box) {
       const list = (data && data.classes) || [];
       if (!list.length) {
-        box.innerHTML = '<div class="empty">هنوز کلاسی ساخته نشده. معلم می‌تواند کلاس بسازد.</div>';
+        box.innerHTML = '<div class="empty">هنوز اتاقی نیست. معلم می‌تواند اتاق بسازد.</div>';
       } else {
         const byId = {};
         list.forEach(c => { byId[c.id] = c; });
         box.innerHTML = list.map(c => {
           const meet = c.meet_url || ('https://meet.jit.si/Kavosh-' + c.id);
-          return '<div class="card sky-room" style="padding:14px">'
+          const book = c.book_id ? (' · کتاب: ' + c.book_id) : '';
+          return '<div class="card" style="padding:14px">'
             + '<h3 style="margin-top:0">' + escapeHtml(c.title) + '</h3>'
-            + '<p style="font-size:12px;color:var(--muted)">' + escapeHtml(c.description||'') + '</p>'
-            + '<div class="sky-meta">'
-            + '<span>معلم: ' + escapeHtml(c.teacher_name||c.teacher_key||'') + '</span>'
-            + '<span>' + escapeHtml(c.schedule||'زمان اعلام می‌شود') + '</span>'
-            + '<span>کد: ' + escapeHtml(c.id) + '</span></div>'
+            + '<p style="font-size:12px;color:var(--muted)">' + escapeHtml(c.class_type || '') + book + '</p>'
+            + '<p style="font-size:12px;color:var(--muted)">' + escapeHtml(c.description || '') + '</p>'
+            + '<p>کد اتاق: <span class="code-pill">' + escapeHtml(c.join_code || '—') + '</span></p>'
+            + '<p style="font-size:12px">معلم: ' + escapeHtml(c.teacher_name || c.teacher_key || '') + '</p>'
             + '<div class="sky-actions">'
-            + '<button type="button" class="btn btn-primary" data-sky-join="' + escapeHtml(c.id) + '">ورود به اتاق کلاس</button>'
-            + '<button type="button" class="btn" data-sky-invite="' + escapeHtml(meet) + '">کپی دعوت</button>'
+            + '<button type="button" class="btn btn-primary" data-sky-join="' + escapeHtml(c.id) + '">ورود به اتاق</button>'
+            + '<button type="button" class="btn" data-copy-code="' + escapeHtml(c.join_code || '') + '">کپی کد</button>'
             + '<a class="btn btn-ghost" href="' + escapeHtml(meet) + '" target="_blank" rel="noopener">لینک مستقیم</a>'
             + '</div></div>';
         }).join('');
         box.querySelectorAll('[data-sky-join]').forEach(btn => {
-          btn.addEventListener('click', () => {
-            const c = byId[btn.getAttribute('data-sky-join')];
-            if (c) openSkyRoom(c);
-          });
+          btn.addEventListener('click', () => { const c = byId[btn.getAttribute('data-sky-join')]; if (c) openSkyRoom(c); });
         });
-        box.querySelectorAll('[data-sky-invite]').forEach(btn => {
+        box.querySelectorAll('[data-copy-code]').forEach(btn => {
           btn.addEventListener('click', async () => {
-            const u = btn.getAttribute('data-sky-invite');
-            try { await navigator.clipboard.writeText(u); alert('لینک دعوت کپی شد'); }
-            catch (e) { prompt('لینک دعوت:', u); }
+            const u = btn.getAttribute('data-copy-code');
+            try { await navigator.clipboard.writeText(u); alert('کد کپی شد: ' + u); } catch(e) { prompt('کد:', u); }
           });
         });
       }
     }
-    const chRes = await api('/api/teacher-chat');
-    const ch = chRes.data || {};
-    const cl = $('tchChatList');
-    if (cl) {
-      const msgs = ch.messages || [];
-      if (!msgs.length) cl.innerHTML = '<div class="empty">پیامی نیست</div>';
-      else cl.innerHTML = msgs.map(m => {
-        const b = m.body || '';
-        if (b.indexOf('[صوت] data:audio') === 0) {
-          const src = b.slice(6).trim().replace(/"/g, '');
-          return '<div style="padding:6px 0;border-bottom:1px solid var(--line)"><strong>'
-            + escapeHtml(m.from_key) + '</strong>: <audio controls src="' + src + '" style="max-width:100%;margin-top:6px"></audio></div>';
-        }
-        return '<div style="padding:6px 0;border-bottom:1px solid var(--line)"><strong>'
-          + escapeHtml(m.from_key) + '</strong>: ' + escapeHtml(b) + '</div>';
-      }).join('');
-    }
+    try {
+      const chRes = await api('/api/teacher-chat');
+      const ch = chRes.data || {};
+      const cl = $('tchChatList');
+      if (cl) {
+        const msgs = ch.messages || [];
+        cl.innerHTML = msgs.length ? msgs.map(m => {
+          const b = m.body || '';
+          if (b.indexOf('[صوت] data:audio') === 0) {
+            return '<div style="padding:6px 0;border-bottom:1px solid var(--line)"><strong>' + escapeHtml(m.from_key) + '</strong><br><audio controls src="' + b.slice(6).trim().replace(/"/g,'') + '"></audio></div>';
+          }
+          return '<div style="padding:6px 0;border-bottom:1px solid var(--line)"><strong>' + escapeHtml(m.from_key) + '</strong>: ' + escapeHtml(b) + '</div>';
+        }).join('') : '<div class="empty">پیامی نیست</div>';
+      }
+    } catch(e) {}
   } catch (e) {
     console.error('loadClasses', e);
     const box = $('classList');
@@ -2310,36 +2401,65 @@ async function loadClasses(){
   }
 }
 
+if ($('buyPackBtn')) $('buyPackBtn').addEventListener('click', async () => {
+  const {data} = await api('/api/class-package', {method:'POST', body:'{}'});
+  $('packMsg').innerHTML = data.ok ? ('<div class="alert ok">' + escapeHtml(data.message||'ثبت شد') + '</div>') : ('<div class="alert err">' + escapeHtml(data.error||'خطا') + '</div>');
+  if (data.ok) loadClassPackage();
+});
+
+if ($('joinCodeBtn')) $('joinCodeBtn').addEventListener('click', async () => {
+  const code = ($('joinCodeInput') && $('joinCodeInput').value || '').trim();
+  const {data} = await api('/api/classes/join', {method:'POST', body: JSON.stringify({code})});
+  if (data.ok && data.class) {
+    $('joinMsg').innerHTML = '<div class="alert ok">وارد شدید</div>';
+    if (typeof window.__openSkyRoom === 'function') window.__openSkyRoom(data.class);
+    else if ($('liveEmbed')) {
+      $('liveEmbed').src = data.class.meet_url;
+      $('liveClassBox').style.display = '';
+    }
+  } else {
+    $('joinMsg').innerHTML = '<div class="alert err">' + escapeHtml(data.error||'کد نامعتبر') + '</div>';
+  }
+});
+
+if ($('clCreateBtn')) $('clCreateBtn').addEventListener('click', async () => {
+  const body = {
+    title: $('clTitle') && $('clTitle').value,
+    description: $('clDesc') && $('clDesc').value,
+    schedule: $('clSched') && $('clSched').value,
+    classType: $('clType') && $('clType').value,
+    bookId: $('clBook') && $('clBook').value
+  };
+  const {data} = await api('/api/classes', {method:'POST', body: JSON.stringify(body)});
+  if (data.ok) {
+    $('clMsg').innerHTML = '<div class="alert ok">اتاق ساخته شد — کد: <span class="code-pill">' + escapeHtml(data.join_code||'') + '</span></div>';
+    loadClasses();
+  } else {
+    $('clMsg').innerHTML = '<div class="alert err">' + escapeHtml(data.error||'خطا') + '</div>';
+  }
+});
+
+if ($('skyCopyCode')) $('skyCopyCode').addEventListener('click', async () => {
+  const u = window.__skyJoinCode || '';
+  try { await navigator.clipboard.writeText(u); alert('کد: ' + u); } catch(e) { prompt('کد', u); }
+});
+
 function bindSkyRoomControls(){
-  const copyBtn = $('skyCopyInvite');
-  if (copyBtn) copyBtn.addEventListener('click', async () => {
-    const u = window.__skyMeetUrl || (($('skyInviteCode') && $('skyInviteCode').textContent) || '');
-    try { await navigator.clipboard.writeText(u); alert('لینک دعوت کپی شد'); }
-    catch (e) { prompt('لینک:', u); }
+  if ($('skyCopyInvite')) $('skyCopyInvite').addEventListener('click', async () => {
+    const u = window.__skyMeetUrl || '';
+    try { await navigator.clipboard.writeText(u); alert('لینک کپی شد'); } catch(e) { prompt('لینک', u); }
   });
-  const joinBtn = $('skyJoinMic');
-  if (joinBtn) joinBtn.addEventListener('click', () => {
-    const ifr = $('liveEmbed');
-    const u = window.__skyMeetUrl;
-    if (ifr && u) ifr.src = u;
-    alert('اجازه میکروفون را در مرورگر تأیید کنید. دانش‌آموزان با لینک دعوت وارد همین اتاق می‌شوند.');
+  if ($('skyJoinMic')) $('skyJoinMic').addEventListener('click', () => {
+    if ($('liveEmbed') && window.__skyMeetUrl) $('liveEmbed').src = window.__skyMeetUrl;
+    alert('اجازه میکروفون/دوربین/اشتراک صفحه را در مرورگر بدهید.');
   });
-  const closeBtn = $('skyCloseRoom');
-  if (closeBtn) closeBtn.addEventListener('click', () => {
-    const wrap = $('liveClassBox');
-    const ifr = $('liveEmbed');
-    if (ifr) ifr.src = 'about:blank';
-    if (wrap) wrap.style.display = 'none';
+  if ($('skyCloseRoom')) $('skyCloseRoom').addEventListener('click', () => {
+    if ($('liveEmbed')) $('liveEmbed').src = 'about:blank';
+    if ($('liveClassBox')) $('liveClassBox').style.display = 'none';
   });
 }
 bindSkyRoomControls();
 
-
-$('clCreateBtn') && $('clCreateBtn').addEventListener('click', async () => {
-  const {data} = await api('/api/classes', {method:'POST', body: JSON.stringify({title:$('clTitle').value, description:$('clDesc').value, schedule:$('clSched').value})});
-  $('clMsg').innerHTML = data.ok ? '<div class="alert ok">ایجاد شد</div>' : `<div class="alert err">${escapeHtml(data.error||'')}</div>`;
-  if (data.ok) loadClasses();
-});
 $('grBtn') && $('grBtn').addEventListener('click', async () => {
   const {data} = await api('/api/grades', {method:'POST', body: JSON.stringify({classId:$('grClassId').value, studentKey:$('grStudent').value, studentLabel:$('grStudent').value, score:$('grScore').value, note:$('grNote').value})});
   $('grMsg').innerHTML = data.ok ? '<div class="alert ok">نمره ثبت شد</div>' : `<div class="alert err">${escapeHtml(data.error||'')}</div>`;
@@ -2429,14 +2549,9 @@ $('userLoginBtn') && $('userLoginBtn').addEventListener('click', async () => {
   });
 })();
 
-// render audio in teacher chat
-const _oldLoadClasses = typeof loadClasses === 'function' ? loadClasses : null;
 
 
-$('liveEmbedToggle') && $('liveEmbedToggle').addEventListener('click', () => {
-  const w = $('liveEmbedWrap');
-  if (w) w.style.display = w.style.display === 'none' ? '' : 'none';
-});
+
 /* init */
 try { applyI18n(); } catch(e) { console.error(e); }
 try { renderFeatures(); } catch(e) { console.error(e); }
@@ -2444,9 +2559,9 @@ try { renderStatusCards(); } catch(e) { console.error(e); }
 try { renderConvList(); } catch(e) { console.error(e); }
 try { refreshHealth(); } catch(e) { console.error(e); }
 try { refreshMe(); } catch(e) { console.error(e); }
-try { setInterval(() => { refreshHealth().catch(()=>{}); }, 60000); } catch(e) {}
-})();
-</script>
+try { showPage('home'); } catch(e) { console.error(e); }
+try { setInterval(function(){ try { refreshHealth(); } catch(e){} }, 60000); } catch(e) {}
+})();</script>
 
 <div id="kavosh-copyright-footer" style="position:fixed;bottom:8px;left:50%;transform:translateX(-50%);z-index:30;font-size:10px;color:var(--muted);opacity:.85;pointer-events:none;text-align:center;max-width:90%">
   © کاوش AI 2 — استفادهٔ تجاری یا انتشار مجدد بدون مجوز صاحب اثر ممنوع است.
