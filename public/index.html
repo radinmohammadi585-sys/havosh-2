@@ -181,6 +181,33 @@ background:linear-gradient(135deg,#6b8cff,#9b7dff);border:none;color:#fff;font-s
 .join-box input{letter-spacing:2px;font-size:18px;text-align:center;direction:ltr}
 .code-pill{display:inline-block;direction:ltr;padding:6px 12px;border-radius:999px;background:rgba(139,167,255,.18);border:1px solid rgba(139,167,255,.4);font-weight:700;letter-spacing:1px}
 
+
+.room-local{display:grid;grid-template-columns:1fr 280px;gap:12px;min-height:520px}
+@media(max-width:900px){.room-local{grid-template-columns:1fr}}
+.room-stage{display:flex;flex-direction:column;gap:8px;min-width:0}
+.room-videos{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:700px){.room-videos{grid-template-columns:1fr}}
+.room-video-box{position:relative;background:#050814;border-radius:14px;overflow:hidden;border:1px solid var(--line);aspect-ratio:16/9}
+.room-video-box video{width:100%;height:100%;object-fit:contain;background:#000}
+.room-video-label{position:absolute;left:8px;bottom:8px;background:rgba(0,0,0,.65);padding:4px 10px;border-radius:999px;font-size:11px}
+.speakers-bar{display:flex;flex-wrap:wrap;gap:6px;min-height:36px;align-items:center}
+.speaker-chip{padding:4px 10px;border-radius:999px;font-size:12px;background:rgba(255,255,255,.06);border:1px solid var(--line)}
+.speaker-chip.hot{border-color:#34d399;background:rgba(52,211,153,.15);box-shadow:0 0 12px rgba(52,211,153,.35)}
+.board-wrap{position:relative;background:#0b1224;border-radius:14px;border:1px solid rgba(94,234,212,.3);overflow:hidden;min-height:320px}
+.board-wrap canvas{width:100%;height:auto;display:block;touch-action:none;cursor:crosshair;background:
+  linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px),
+  linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px);background-size:24px 24px}
+.tool-bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 0}
+.color-dot{width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer}
+.color-dot.on{border-color:#fff;transform:scale(1.15)}
+.room-side{display:flex;flex-direction:column;gap:10px;min-width:0}
+.room-chat{flex:1;display:flex;flex-direction:column;min-height:220px;border:1px solid var(--line);border-radius:14px;background:rgba(0,0,0,.2);overflow:hidden}
+.room-chat-log{flex:1;overflow:auto;padding:10px;font-size:13px;max-height:240px}
+.room-chat-input{display:flex;gap:6px;padding:8px;border-top:1px solid var(--line)}
+.member-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px}
+.member-row .pen{margin-right:auto;cursor:pointer;opacity:.7}
+.member-row .pen:hover{opacity:1}
+
 </style>
 </head>
 <body>
@@ -573,27 +600,61 @@ int main() {
         </div>
       </div>
 
-      <div class="sky-room" id="liveClassBox" style="display:none">
-        <h3 id="skyRoomTitle">اتاق کلاس زنده</h3>
+            <div class="sky-room" id="liveClassBox" style="display:none">
+        <h3 id="skyRoomTitle">اتاق کلاس زنده (بدون سرویس بیرونی)</h3>
         <div class="sky-meta">
           <span id="skyRoomId">شناسه: —</span>
           <span id="skyRoomTeacher">معلم: —</span>
           <span id="skyRoomCode">کد: —</span>
         </div>
-        <p style="font-size:12px;color:var(--muted)">در اتاق می‌توانید میکروفون، دوربین و <strong>اشتراک صفحه</strong> (کامپیوتر یا گوشی) را روشن کنید.</p>
-        <div class="sky-stage" id="liveEmbedWrap">
-          <iframe id="liveEmbed" allow="camera; microphone; fullscreen; display-capture; autoplay" title="اتاق کلاس کاوش"></iframe>
+        <div class="speakers-bar" id="speakersBar"><span style="font-size:12px;color:var(--muted)">در حال صحبت:</span></div>
+        <div class="room-local">
+          <div class="room-stage">
+            <div class="room-videos" id="localVideos">
+              <div class="room-video-box">
+                <video id="localCam" autoplay playsinline muted></video>
+                <span class="room-video-label">دوربین شما</span>
+              </div>
+              <div class="room-video-box">
+                <video id="localScreen" autoplay playsinline muted></video>
+                <span class="room-video-label">صفحه نمایش شما</span>
+              </div>
+            </div>
+            <h4 style="margin:8px 0 4px;font-size:13px;color:var(--muted)">تصویر بقیهٔ کلاس</h4>
+            <div class="room-videos" id="remoteVideos"></div>
+            <p style="font-size:11px;color:var(--muted);margin:0">وقتی کسی دوربین یا صفحه را روشن کند، برای دیگران هم اینجا دیده می‌شود (ارتباط مستقیم مرورگرها از طریق سیگنال سرور کاوش).</p>
+            <div class="tool-bar">
+              <button type="button" class="btn btn-primary" id="btnMic">🎙 میکروفون</button>
+              <button type="button" class="btn" id="btnCam">📷 دوربین</button>
+              <button type="button" class="btn" id="btnScreen">🖥 اشتراک صفحه</button>
+              <button type="button" class="btn" id="btnPen">✏️ مداد</button>
+              <span id="colorPalette"></span>
+              <button type="button" class="btn btn-ghost" id="btnBoardClear">پاک کردن تخته</button>
+              <button type="button" class="btn btn-ghost" id="skyCloseRoom">خروج از اتاق</button>
+            </div>
+            <div class="board-wrap">
+              <canvas id="classBoard" width="1920" height="1080"></canvas>
+            </div>
+            <p style="font-size:11px;color:var(--muted);margin:0">تخته و چت روی سرور کاوش همگام می‌شوند. صدا/تصویر روی دستگاه شما (بدون سرویس ابری بیرونی). کیفیت صدا: ۴۸kHz + حذف نویز مرورگر.</p>
+          </div>
+          <div class="room-side">
+            <div class="card" style="margin:0;padding:10px">
+              <h3 style="margin:0 0 8px;font-size:14px">حاضرین</h3>
+              <div id="roomMembers"></div>
+            </div>
+            <div class="room-chat">
+              <div style="padding:8px 10px;border-bottom:1px solid var(--line);font-weight:700;font-size:13px">💬 چت کلاس</div>
+              <div class="room-chat-log" id="roomChatLog"></div>
+              <div class="room-chat-input">
+                <input type="text" id="roomChatInput" placeholder="پیام…" style="flex:1">
+                <button type="button" class="btn btn-primary" id="roomChatSend">ارسال</button>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="sky-actions">
-          <button type="button" class="btn btn-primary" id="skyJoinMic">🎙 ورود صوتی / تصویری</button>
-          <button type="button" class="btn" id="skyCopyInvite">کپی لینک</button>
-          <button type="button" class="btn" id="skyCopyCode">کپی کد اتاق</button>
-          <a class="btn btn-ghost" id="liveMeetLink" href="#" target="_blank" rel="noopener">تب جدید</a>
-          <button type="button" class="btn btn-ghost" id="skyCloseRoom">بستن</button>
-        </div>
-        <div class="sky-invite" id="skyInviteBox">
-          <strong>دعوت:</strong> لینک یا کد را برای دانش‌آموز بفرستید.
-          <div style="margin-top:8px">کد: <span class="code-pill" id="skyInviteCode">—</span></div>
+        <div class="sky-invite" style="margin-top:12px">
+          کد دعوت: <span class="code-pill" id="skyInviteCode">—</span>
+          <button type="button" class="btn btn-ghost" id="skyCopyCode">کپی کد</button>
         </div>
       </div>
 
@@ -2342,10 +2403,10 @@ async function loadClasses(){
       window.__skyJoinCode = code;
       window.__skyClass = c;
       if ($('liveClassBox')) $('liveClassBox').style.display = '';
-      if ($('liveEmbed')) $('liveEmbed').src = meet;
+      /* liveEmbed removed — local room */
       if ($('liveClassBox')) $('liveClassBox').scrollIntoView({behavior:'smooth'});
     };
-    window.__openSkyRoom = openSkyRoom;
+    window.__openSkyRoom = function(c){ openLocalRoom(c); loadRoomChat(); };
     if (box) {
       const list = (data && data.classes) || [];
       if (!list.length) {
@@ -2551,6 +2612,401 @@ $('userLoginBtn') && $('userLoginBtn').addEventListener('click', async () => {
 
 
 
+
+
+/* —— اتاق کلاس محلی (بدون سرویس بیرونی) —— */
+const BOARD_COLORS = ['#e11d48','#f59e0b','#84cc16','#22c55e','#06b6d4','#3b82f6','#a855f7','#f8fafc'];
+window.__room = { classId:null, drawing:false, pen:true, color:BOARD_COLORS[0], lastBoardAt:0, pollTimer:null, audioCtx:null, micStream:null, camStream:null, screenStream:null };
+
+/* WebRTC mesh: others can see camera/screen */
+window.__rtc = { peers: {}, myKey: null, lastSig: 0, outbound: null, poll: null };
+
+function rtcMyKey() {
+  if (user && (user.role || user.username)) return String(user.role || user.username);
+  if (!window.__rtc._gk) window.__rtc._gk = 'g-' + Math.random().toString(36).slice(2, 9);
+  return window.__rtc._gk;
+}
+
+function ensureOutboundStream() {
+  if (window.__rtc.outbound) return window.__rtc.outbound;
+  window.__rtc.outbound = new MediaStream();
+  return window.__rtc.outbound;
+}
+
+function addTrackToOutbound(track) {
+  const s = ensureOutboundStream();
+  // replace same-kind track
+  s.getTracks().filter(t => t.kind === track.kind).forEach(t => { s.removeTrack(t); t.stop && 0; });
+  s.addTrack(track);
+  // renegotiate existing peers
+  Object.keys(window.__rtc.peers).forEach(k => rtcNegotiate(k));
+}
+
+function remoteBox(peerId) {
+  let el = document.getElementById('rv-' + peerId);
+  if (el) return el.querySelector('video');
+  const wrap = document.createElement('div');
+  wrap.className = 'room-video-box';
+  wrap.id = 'rv-' + peerId;
+  wrap.innerHTML = '<video autoplay playsinline></video><span class="room-video-label">' + escapeHtml(peerId) + '</span>';
+  const host = $('remoteVideos');
+  if (host) host.appendChild(wrap);
+  return wrap.querySelector('video');
+}
+
+async function rtcGetPC(peerId) {
+  if (window.__rtc.peers[peerId]) return window.__rtc.peers[peerId];
+  const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+  window.__rtc.peers[peerId] = pc;
+  const out = ensureOutboundStream();
+  out.getTracks().forEach(t => pc.addTrack(t, out));
+  pc.ontrack = (ev) => {
+    const v = remoteBox(peerId);
+    if (v) v.srcObject = ev.streams[0] || new MediaStream([ev.track]);
+  };
+  pc.onicecandidate = (ev) => {
+    if (!ev.candidate) return;
+    api('/api/room/rtc', { method:'POST', body: JSON.stringify({
+      classId: window.__room.classId, toKey: peerId, kind: 'ice',
+      payload: { candidate: ev.candidate }
+    })});
+  };
+  return pc;
+}
+
+async function rtcNegotiate(peerId) {
+  const pc = await rtcGetPC(peerId);
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await api('/api/room/rtc', { method:'POST', body: JSON.stringify({
+    classId: window.__room.classId, toKey: peerId, kind: 'offer',
+    payload: { sdp: pc.localDescription }
+  })});
+}
+
+async function rtcHandleSignal(sig) {
+  const from = sig.from_key;
+  const kind = sig.kind;
+  const payload = sig.payload || {};
+  if (!from || from === rtcMyKey()) return;
+  const pc = await rtcGetPC(from);
+  try {
+    if (kind === 'offer' && payload.sdp) {
+      await pc.setRemoteDescription(payload.sdp);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      await api('/api/room/rtc', { method:'POST', body: JSON.stringify({
+        classId: window.__room.classId, toKey: from, kind: 'answer',
+        payload: { sdp: pc.localDescription }
+      })});
+    } else if (kind === 'answer' && payload.sdp) {
+      await pc.setRemoteDescription(payload.sdp);
+    } else if (kind === 'ice' && payload.candidate) {
+      try { await pc.addIceCandidate(payload.candidate); } catch(e) {}
+    } else if (kind === 'hello') {
+      await rtcNegotiate(from);
+    }
+  } catch (e) { console.error('rtc', e); }
+}
+
+async function rtcPoll() {
+  if (!window.__room.classId) return;
+  const {data} = await api('/api/room/rtc', { method:'POST', body: JSON.stringify({
+    action: 'pull', classId: window.__room.classId, after: window.__rtc.lastSig || 0
+  })});
+  (data.signals || []).forEach(s => {
+    if (s.created_at > (window.__rtc.lastSig||0)) window.__rtc.lastSig = s.created_at;
+    rtcHandleSignal(s);
+  });
+}
+
+async function rtcAnnounce() {
+  await api('/api/room/rtc', { method:'POST', body: JSON.stringify({
+    classId: window.__room.classId, toKey: '*', kind: 'hello', payload: { key: rtcMyKey() }
+  })});
+}
+
+function rtcStart() {
+  if (window.__rtc.poll) clearInterval(window.__rtc.poll);
+  window.__rtc.lastSig = Math.floor(Date.now()/1000) - 5;
+  rtcAnnounce();
+  window.__rtc.poll = setInterval(rtcPoll, 1500);
+}
+
+function rtcStop() {
+  if (window.__rtc.poll) clearInterval(window.__rtc.poll);
+  window.__rtc.poll = null;
+  Object.values(window.__rtc.peers).forEach(pc => { try { pc.close(); } catch(e){} });
+  window.__rtc.peers = {};
+  if ($('remoteVideos')) $('remoteVideos').innerHTML = '';
+}
+
+
+function paintBoardStroke(ctx, stroke) {
+  const pts = stroke.points || [];
+  if (pts.length < 2) return;
+  ctx.strokeStyle = stroke.color || '#e11d48';
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.stroke();
+}
+
+function boardCtx() {
+  const c = $('classBoard');
+  return c ? c.getContext('2d') : null;
+}
+
+function boardPoint(ev) {
+  const c = $('classBoard');
+  const r = c.getBoundingClientRect();
+  const x = ((ev.clientX - r.left) / r.width) * c.width;
+  const y = ((ev.clientY - r.top) / r.height) * c.height;
+  return [x, y];
+}
+
+async function openLocalRoom(c) {
+  const classId = c && c.id;
+  if (!classId) return;
+  window.__room.classId = classId;
+  window.__skyClass = c;
+  window.__skyJoinCode = c.join_code || '';
+  if ($('skyRoomTitle')) $('skyRoomTitle').textContent = 'اتاق: ' + (c.title || classId);
+  if ($('skyRoomId')) $('skyRoomId').textContent = 'شناسه: ' + classId;
+  if ($('skyRoomTeacher')) $('skyRoomTeacher').textContent = 'معلم: ' + (c.teacher_name || c.teacher_key || '');
+  if ($('skyRoomCode')) $('skyRoomCode').textContent = 'کد: ' + (c.join_code || '');
+  if ($('skyInviteCode')) $('skyInviteCode').textContent = c.join_code || '';
+  if ($('liveClassBox')) { $('liveClassBox').style.display = ''; $('liveClassBox').scrollIntoView({behavior:'smooth'}); }
+
+  // palette
+  const pal = $('colorPalette');
+  if (pal && !pal.dataset.ready) {
+    pal.dataset.ready = '1';
+    BOARD_COLORS.forEach((col, i) => {
+      const d = document.createElement('button');
+      d.type = 'button';
+      d.className = 'color-dot' + (i === 0 ? ' on' : '');
+      d.style.background = col;
+      d.title = col;
+      d.addEventListener('click', () => {
+        window.__room.color = col;
+        window.__room.pen = true;
+        pal.querySelectorAll('.color-dot').forEach(x => x.classList.remove('on'));
+        d.classList.add('on');
+      });
+      pal.appendChild(d);
+    });
+  }
+
+  const name = (user && (user.teacher_name || user.display_name || user.username || user.label || user.role)) || 'مهمان';
+  const role = (user && user.role) || 'student';
+  await api('/api/room/join', { method:'POST', body: JSON.stringify({ classId, displayName: name, role }) });
+
+  // clear & load board
+  const ctx = boardCtx();
+  if (ctx) { ctx.clearRect(0,0,1920,1080); }
+  window.__room.lastBoardAt = 0;
+  await syncBoard();
+  startRoomPoll();
+  setupBoardDraw();
+  rtcStart();
+}
+
+async function syncBoard() {
+  const cid = window.__room.classId;
+  if (!cid) return;
+  const {data} = await api('/api/room/board?classId=' + encodeURIComponent(cid) + '&after=' + (window.__room.lastBoardAt||0));
+  const ctx = boardCtx();
+  if (!ctx || !data.strokes) return;
+  data.strokes.forEach(s => {
+    paintBoardStroke(ctx, s);
+    if (s.created_at > (window.__room.lastBoardAt||0)) window.__room.lastBoardAt = s.created_at;
+  });
+}
+
+function setupBoardDraw() {
+  const c = $('classBoard');
+  if (!c || c.dataset.bound) return;
+  c.dataset.bound = '1';
+  let pts = [];
+  const onDown = (ev) => {
+    if (!window.__room.pen) return;
+    window.__room.drawing = true;
+    pts = [boardPoint(ev.touches ? ev.touches[0] : ev)];
+    ev.preventDefault();
+  };
+  const onMove = (ev) => {
+    if (!window.__room.drawing) return;
+    const p = boardPoint(ev.touches ? ev.touches[0] : ev);
+    pts.push(p);
+    const ctx = boardCtx();
+    if (ctx && pts.length >= 2) {
+      ctx.strokeStyle = window.__room.color;
+      ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(pts[pts.length-2][0], pts[pts.length-2][1]);
+      ctx.lineTo(p[0], p[1]);
+      ctx.stroke();
+    }
+    ev.preventDefault();
+  };
+  const onUp = async () => {
+    if (!window.__room.drawing) return;
+    window.__room.drawing = false;
+    if (pts.length >= 2) {
+      await api('/api/room/board', { method:'POST', body: JSON.stringify({ classId: window.__room.classId, color: window.__room.color, points: pts }) });
+    }
+    pts = [];
+  };
+  c.addEventListener('mousedown', onDown);
+  c.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+  c.addEventListener('touchstart', onDown, {passive:false});
+  c.addEventListener('touchmove', onMove, {passive:false});
+  c.addEventListener('touchend', onUp);
+}
+
+function startRoomPoll() {
+  if (window.__room.pollTimer) clearInterval(window.__room.pollTimer);
+  window.__room.pollTimer = setInterval(async () => {
+    const cid = window.__room.classId;
+    if (!cid) return;
+    const speaking = window.__room._speaking ? 1 : 0;
+    const {data} = await api('/api/room/heartbeat', { method:'POST', body: JSON.stringify({ classId: cid, speaking }) });
+    renderRoomMembers(data.members || []);
+    await syncBoard();
+    // chat reuse teacher-chat filtered lightly
+  }, 2500);
+}
+
+function renderRoomMembers(members) {
+  const box = $('roomMembers');
+  const bar = $('speakersBar');
+  if (box) {
+    box.innerHTML = (members.length ? members : [{display_name:'—', role:'', speaking:0}]).map(m => {
+      const hot = m.speaking ? ' style="color:#34d399"' : '';
+      return '<div class="member-row"><span' + hot + '>' + escapeHtml(m.display_name||m.member_key||'') + '</span>'
+        + '<small style="color:var(--muted)">' + escapeHtml(m.role||'') + '</small>'
+        + '<span class="pen" title="مداد روی تخته" data-pen-user="' + escapeHtml(m.member_key||'') + '">✏️</span></div>';
+    }).join('');
+    box.querySelectorAll('[data-pen-user]').forEach(el => {
+      el.addEventListener('click', () => { window.__room.pen = true; if ($('btnPen')) $('btnPen').classList.add('btn-primary'); });
+    });
+  }
+  if (bar) {
+    const speakers = (members||[]).filter(m => m.speaking);
+    bar.innerHTML = '<span style="font-size:12px;color:var(--muted)">در حال صحبت:</span> '
+      + (speakers.length ? speakers.map(m => '<span class="speaker-chip hot">' + escapeHtml(m.display_name||'') + '</span>').join('') : '<span class="speaker-chip">کسی صحبت نمی‌کند</span>');
+  }
+}
+
+async function enableMic() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, sampleRate: 48000, channelCount: 1 },
+      video: false
+    });
+    window.__room.micStream = stream;
+    stream.getTracks().forEach(addTrackToOutbound);
+    rtcStart();
+    // speaking detection
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AudioCtx();
+    const src = ctx.createMediaStreamSource(stream);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 512;
+    src.connect(analyser);
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    window.__room.audioCtx = ctx;
+    const tick = () => {
+      if (!window.__room.micStream) return;
+      analyser.getByteFrequencyData(data);
+      let sum = 0; for (let i=0;i<data.length;i++) sum += data[i];
+      window.__room._speaking = (sum / data.length) > 18;
+      requestAnimationFrame(tick);
+    };
+    tick();
+    alert('میکروفون فعال شد (کیفیت بالا، محلی)');
+  } catch(e) { alert('دسترسی میکروفون داده نشد'); }
+}
+
+async function enableCam() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+    window.__room.camStream = stream;
+    if ($('localCam')) { $('localCam').srcObject = stream; }
+    stream.getTracks().forEach(addTrackToOutbound);
+    rtcStart();
+  } catch(e) { alert('دوربین در دسترس نیست'); }
+}
+
+async function enableScreen() {
+  try {
+    const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: true });
+    window.__room.screenStream = stream;
+    if ($('localScreen')) $('localScreen').srcObject = stream;
+    stream.getTracks().forEach(addTrackToOutbound);
+    rtcStart();
+  } catch(e) { alert('اشتراک صفحه لغو شد'); }
+}
+
+function stopLocalRoom() {
+  if (window.__room.pollTimer) clearInterval(window.__room.pollTimer);
+  window.__room.pollTimer = null;
+  ['micStream','camStream','screenStream'].forEach(k => {
+    const s = window.__room[k];
+    if (s) s.getTracks().forEach(t => t.stop());
+    window.__room[k] = null;
+  });
+  if ($('localCam')) $('localCam').srcObject = null;
+  if ($('localScreen')) $('localScreen').srcObject = null;
+  window.__room.classId = null;
+  rtcStop();
+  if ($('liveClassBox')) $('liveClassBox').style.display = 'none';
+}
+
+// bind tools once
+(function bindRoomTools(){
+  if (window.__roomToolsBound) return;
+  window.__roomToolsBound = true;
+  document.addEventListener('click', (ev) => {
+    const t = ev.target && ev.target.id;
+    if (t === 'btnMic') enableMic();
+    if (t === 'btnCam') enableCam();
+    if (t === 'btnScreen') enableScreen();
+    if (t === 'btnPen') { window.__room.pen = !window.__room.pen; }
+    if (t === 'btnBoardClear') {
+      api('/api/room/board', { method:'POST', body: JSON.stringify({ classId: window.__room.classId, action: 'clear' }) }).then(() => {
+        const ctx = boardCtx(); if (ctx) ctx.clearRect(0,0,1920,1080);
+        window.__room.lastBoardAt = 0;
+      });
+    }
+    if (t === 'skyCloseRoom') stopLocalRoom();
+    if (t === 'roomChatSend') {
+      const inp = $('roomChatInput');
+      const body = inp && inp.value;
+      if (!body) return;
+      api('/api/teacher-chat', { method:'POST', body: JSON.stringify({ body: '[کلاس:' + (window.__room.classId||'') + '] ' + body }) }).then(({data}) => {
+        if (data.ok && inp) { inp.value=''; loadRoomChat(); }
+      });
+    }
+  });
+})();
+
+async function loadRoomChat() {
+  const {data} = await api('/api/teacher-chat');
+  const log = $('roomChatLog');
+  if (!log) return;
+  const cid = window.__room.classId || '';
+  const msgs = (data.messages||[]).filter(m => !cid || (m.body||'').indexOf('[کلاس:'+cid+']') >= 0 || (m.body||'').indexOf(cid) >= 0).slice(0, 40);
+  log.innerHTML = msgs.map(m => '<div style="margin-bottom:6px"><strong>' + escapeHtml(m.from_key) + '</strong>: ' + escapeHtml((m.body||'').replace(/\[کلاس:[^\]]+\]\s*/, '')) + '</div>').join('') || '<div class="empty">چتی نیست</div>';
+}
+
+// override open sky
+window.__openSkyRoom = function(c) { openLocalRoom(c); loadRoomChat(); };
 
 /* init */
 try { applyI18n(); } catch(e) { console.error(e); }
