@@ -12,7 +12,7 @@ from economy import (
     list_market, add_market_listing, list_shop, list_stocks, tick_stocks,
     list_banks, add_bank, list_classes, create_class, add_grade, list_grades,
     add_teacher_message, list_teacher_messages, set_teacher_name,
-    buy_class_package, get_package, find_class_by_code, list_books, ensure_package,
+    buy_class_package, get_package, find_class_by_code, list_books, ensure_package, delete_class,
     room_join, room_heartbeat, room_members_list, board_add_stroke, board_list, board_clear,
     rtc_post, rtc_pull,
 )
@@ -3524,6 +3524,27 @@ class Handler(BaseHTTPRequestHandler):
                     c.commit()
                     return r
                 return self.send_json(200, economy_conn_work(_st))
+            except ValueError as e:
+                return self.send_json(400, {"ok": False, "error": str(e)})
+            except Exception as e:
+                return self.send_json(500, {"ok": False, "error": str(e)[:300]})
+
+
+        if path == "/api/classes/delete":
+            s = self.session()
+            if not s:
+                return self.send_json(401, {"ok": False, "error": "ورود لازم است."})
+            role = str(s.get("role") or "")
+            try:
+                body = self.read_json(10_000)
+                cid = str(body.get("classId") or body.get("id") or "")
+                is_admin = role == "owner" or role.startswith("manager") or role.startswith("deputy")
+                key = role
+                def _del(c):
+                    r = delete_class(c, cid, key, is_admin=is_admin)
+                    c.commit()
+                    return r
+                return self.send_json(200, economy_conn_work(_del))
             except ValueError as e:
                 return self.send_json(400, {"ok": False, "error": str(e)})
             except Exception as e:

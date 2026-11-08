@@ -351,7 +351,7 @@ def create_class(conn, teacher_key: str, teacher_name: str, title: str, descript
 
     cid = "CL-" + secrets.token_hex(4).upper()
     join_code = secrets.token_hex(3).upper()
-    meet = (meet_url or "").strip()[:500] or f"https://meet.jit.si/Kavosh-{cid}"
+    meet = (meet_url or "").strip()[:500] or f"/#class/{cid}"
     now = int(time.time())
     tname = (teacher_name or "")[:80]
     desc = (description or "")[:2000]
@@ -447,7 +447,37 @@ def get_package(conn, user_key: str) -> dict:
     return {"rooms_total": int(row["rooms_total"]), "rooms_used": int(row["rooms_used"]), "source": row["source"] or ""}
 
 
+def delete_class(conn, class_id: str, requester_key: str, is_admin: bool = False) -> dict:
+    class_id = (class_id or "").strip()
+    if not class_id:
+        raise ValueError("شناسه اتاق لازم است.")
+    row = conn.execute("SELECT * FROM online_classes WHERE id=?", (class_id,)).fetchone()
+    if not row:
+        raise ValueError("اتاق پیدا نشد.")
+    owner = str(row["teacher_key"] or "")
+    if not is_admin and owner != requester_key:
+        raise ValueError("فقط سازنده اتاق یا مدیر می‌تواند حذف کند.")
+    conn.execute("DELETE FROM online_classes WHERE id=?", (class_id,))
+    try:
+        conn.execute("DELETE FROM room_members WHERE class_id=?", (class_id,))
+        conn.execute("DELETE FROM board_strokes WHERE class_id=?", (class_id,))
+        conn.execute("DELETE FROM rtc_signals WHERE class_id=?", (class_id,))
+        conn.execute("DELETE FROM class_grades WHERE class_id=?", (class_id,))
+    except Exception:
+        pass
+    # free one package slot for creator
+    try:
+        conn.execute(
+            "UPDATE class_packages SET rooms_used = CASE WHEN rooms_used>0 THEN rooms_used-1 ELSE 0 END, updated_at=? WHERE user_key=?",
+            (int(time.time()), owner),
+        )
+    except Exception:
+        pass
+    return {"ok": True, "id": class_id}
+
+
 def find_class_by_code(conn, code: str):
+
     code = (code or "").strip().upper()
     if not code:
         return None
