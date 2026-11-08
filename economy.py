@@ -86,6 +86,32 @@ def ensure_economy_tables(conn) -> None:
             book_id TEXT,
             created_at INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS room_members (
+            id TEXT PRIMARY KEY,
+            class_id TEXT NOT NULL,
+            member_key TEXT NOT NULL,
+            display_name TEXT,
+            role TEXT,
+            speaking INTEGER DEFAULT 0,
+            last_seen INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS rtc_signals (
+            id TEXT PRIMARY KEY,
+            class_id TEXT NOT NULL,
+            from_key TEXT NOT NULL,
+            to_key TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            created_at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS board_strokes (
+            id TEXT PRIMARY KEY,
+            class_id TEXT NOT NULL,
+            author_key TEXT,
+            color TEXT,
+            points TEXT NOT NULL,
+            created_at INTEGER NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS class_packages (
             user_key TEXT PRIMARY KEY,
             rooms_total INTEGER NOT NULL,
@@ -176,11 +202,15 @@ def login_user(conn, username: str, password: str) -> dict:
 
 
 def list_market(conn, limit: int = 50) -> list:
-    rows = conn.execute(
-        "SELECT * FROM market_listings WHERE status='active' ORDER BY created_at DESC LIMIT ?",
-        (limit,),
-    ).fetchall()
-    return [dict(r) for r in rows]
+    try:
+        ensure_economy_tables(conn)
+        rows = conn.execute(
+            "SELECT * FROM market_listings WHERE status='active' ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
 
 
 def add_market_listing(conn, seller_key: str, seller_name: str, title: str, description: str, price: float, currency: str) -> dict:
@@ -205,13 +235,21 @@ def add_market_listing(conn, seller_key: str, seller_name: str, title: str, desc
 
 
 def list_shop(conn) -> list:
-    rows = conn.execute("SELECT * FROM shop_items WHERE active=1 ORDER BY created_at DESC").fetchall()
-    return [dict(r) for r in rows]
+    try:
+        ensure_economy_tables(conn)
+        rows = conn.execute("SELECT * FROM shop_items WHERE active=1 ORDER BY created_at DESC").fetchall()
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
 
 
 def list_stocks(conn) -> list:
-    rows = conn.execute("SELECT * FROM stock_symbols ORDER BY id").fetchall()
-    return [dict(r) for r in rows]
+    try:
+        ensure_economy_tables(conn)
+        rows = conn.execute("SELECT * FROM stock_symbols ORDER BY id").fetchall()
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
 
 
 def tick_stocks(conn) -> None:
@@ -228,7 +266,11 @@ def tick_stocks(conn) -> None:
 
 
 def list_banks(conn) -> list:
-    return [dict(r) for r in conn.execute("SELECT * FROM banks ORDER BY created_at DESC").fetchall()]
+    try:
+        ensure_economy_tables(conn)
+        return [dict(r) for r in conn.execute("SELECT * FROM banks ORDER BY created_at DESC").fetchall()]
+    except Exception:
+        return []
 
 
 def add_bank(conn, name: str, code: str = "", note: str = "") -> dict:
@@ -244,28 +286,108 @@ def add_bank(conn, name: str, code: str = "", note: str = "") -> dict:
 
 
 def list_classes(conn) -> list:
-    return [dict(r) for r in conn.execute("SELECT * FROM online_classes ORDER BY created_at DESC LIMIT 100").fetchall()]
+    try:
+        ensure_economy_tables(conn)
+    except Exception:
+        pass
+    try:
+        rows = conn.execute("SELECT * FROM online_classes ORDER BY created_at DESC LIMIT 100").fetchall()
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
 
 
 def create_class(conn, teacher_key: str, teacher_name: str, title: str, description: str, schedule: str, meet_url: str = "", class_type: str = "", book_id: str = "", is_staff: bool = False) -> dict:
+    """Create a class room with join code. Defensive against older SQLite schemas."""
     title = (title or "").strip()[:120]
     if not title:
         raise ValueError("عنوان کلاس لازم است.")
-    ensure_package(conn, teacher_key, is_staff=is_staff)
-    row = conn.execute("SELECT rooms_total, rooms_used FROM class_packages WHERE user_key=?", (teacher_key,)).fetchone()
-    if row and int(row["rooms_used"]) >= int(row["rooms_total"]):
-        raise ValueError("سقف ساخت اتاق پر شده. پکیج ۵۰ اتاقه تهیه کنید.")
+    try:
+        ensure_economy_tables(conn)
+    except Exception:
+        pass
+    # ensure columns exist
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(online_classes)").fetchall()}
+        for col in ("meet_url", "join_code", "class_type", "book_id"):
+            if col not in cols:
+                try:
+                    conn.execute(f"ALTER TABLE online_classes ADD COLUMN {col} TEXT")
+                except Exception:
+                    pass
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS class_packages (
+                user_key TEXT PRIMARY KEY,
+                rooms_total INTEGER NOT NULL,
+                rooms_used INTEGER NOT NULL DEFAULT 0,
+                source TEXT,
+                updated_at INTEGER NOT NULL
+            )"""
+        )
+    except Exception:
+        pass
+
+    try:
+        ensure_package(conn, teacher_key, is_staff=is_staff)
+    except Exception:
+        # package optional — staff still can create
+        if not is_staff:
+            raise ValueError("پکیج اتاق در دسترس نیست. ابتدا پکیج تهیه کنید یا با نقش معلم/مدیر وارد شوید.")
+
+    try:
+        row = conn.execute("SELECT rooms_total, rooms_used FROM class_packages WHERE user_key=?", (teacher_key,)).fetchone()
+        if row is not None:
+            total = int(row["rooms_total"] if not isinstance(row, tuple) else row[0])
+            used = int(row["rooms_used"] if not isinstance(row, tuple) else row[1])
+            if total > 0 and used >= total and not is_staff:
+                raise ValueError("سقف ساخت اتاق پر شده. پکیج ۵۰ اتاقه تهیه کنید.")
+            if total == 0 and not is_staff:
+                raise ValueError("پکیج اتاق ندارید. پکیج ۵۰ اتاقه را ثبت کنید.")
+    except ValueError:
+        raise
+    except Exception:
+        if not is_staff:
+            pass  # allow create if package read fails for staff only handled above
+
     cid = "CL-" + secrets.token_hex(4).upper()
     join_code = secrets.token_hex(3).upper()
     meet = (meet_url or "").strip()[:500] or f"https://meet.jit.si/Kavosh-{cid}"
-    conn.execute(
-        "INSERT INTO online_classes (id, title, teacher_key, teacher_name, description, schedule, status, meet_url, join_code, class_type, book_id, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-        (cid, title, teacher_key, (teacher_name or "")[:80], (description or "")[:2000], (schedule or "")[:200], "open", meet, join_code, (class_type or "")[:80], (book_id or "")[:80], int(time.time())),
-    )
-    conn.execute(
-        "UPDATE class_packages SET rooms_used = rooms_used + 1, updated_at=? WHERE user_key=?",
-        (int(time.time()), teacher_key),
-    )
+    now = int(time.time())
+    tname = (teacher_name or "")[:80]
+    desc = (description or "")[:2000]
+    sched = (schedule or "")[:200]
+    ctype = (class_type or "")[:80]
+    bid = (book_id or "")[:80]
+
+    # Prefer full insert; fall back to minimal columns
+    try:
+        conn.execute(
+            "INSERT INTO online_classes (id, title, teacher_key, teacher_name, description, schedule, status, meet_url, join_code, class_type, book_id, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (cid, title, teacher_key, tname, desc, sched, "open", meet, join_code, ctype, bid, now),
+        )
+    except Exception:
+        try:
+            conn.execute(
+                "INSERT INTO online_classes (id, title, teacher_key, teacher_name, description, schedule, status, meet_url, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                (cid, title, teacher_key, tname, desc, sched, "open", meet, now),
+            )
+        except Exception as exc:
+            raise ValueError("خطای ذخیره اتاق: " + str(exc)[:200]) from exc
+
+    try:
+        conn.execute(
+            "UPDATE class_packages SET rooms_used = COALESCE(rooms_used,0) + 1, updated_at=? WHERE user_key=?",
+            (now, teacher_key),
+        )
+        if conn.total_changes == 0 and is_staff:
+            ensure_package(conn, teacher_key, is_staff=True)
+            conn.execute(
+                "UPDATE class_packages SET rooms_used = COALESCE(rooms_used,0) + 1, updated_at=? WHERE user_key=?",
+                (now, teacher_key),
+            )
+    except Exception:
+        pass
+
     return {"ok": True, "id": cid, "meet_url": meet, "join_code": join_code}
 
 
@@ -423,8 +545,12 @@ def add_teacher_message(conn, from_key: str, body: str, class_id: str = "", to_k
 
 
 def list_teacher_messages(conn, limit: int = 50) -> list:
-    rows = conn.execute("SELECT * FROM teacher_messages ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
-    return [dict(r) for r in rows]
+    try:
+        ensure_economy_tables(conn)
+        rows = conn.execute("SELECT * FROM teacher_messages ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
 
 
 def set_teacher_name(conn, username: str, teacher_name: str) -> dict:
@@ -433,3 +559,110 @@ def set_teacher_name(conn, username: str, teacher_name: str) -> dict:
         raise ValueError("نام نمایشی معلم لازم است.")
     conn.execute("UPDATE app_users SET teacher_name=?, display_name=? WHERE username=?", (teacher_name, teacher_name, username))
     return {"ok": True, "teacher_name": teacher_name}
+
+def room_join(conn, class_id: str, member_key: str, display_name: str, role: str = "student") -> dict:
+    class_id = (class_id or "").strip()
+    member_key = (member_key or "guest")[:80]
+    now = int(time.time())
+    rid = secrets.token_hex(8)
+    # upsert-like: delete old then insert
+    conn.execute("DELETE FROM room_members WHERE class_id=? AND member_key=?", (class_id, member_key))
+    conn.execute(
+        "INSERT INTO room_members (id, class_id, member_key, display_name, role, speaking, last_seen) VALUES (?,?,?,?,?,?,?)",
+        (rid, class_id, member_key, (display_name or member_key)[:80], (role or "student")[:40], 0, now),
+    )
+    return {"ok": True, "class_id": class_id}
+
+
+def room_heartbeat(conn, class_id: str, member_key: str, speaking: int = 0) -> dict:
+    now = int(time.time())
+    conn.execute(
+        "UPDATE room_members SET speaking=?, last_seen=? WHERE class_id=? AND member_key=?",
+        (1 if speaking else 0, now, class_id, member_key),
+    )
+    # drop stale > 45s
+    conn.execute("DELETE FROM room_members WHERE last_seen < ?", (now - 45,))
+    return {"ok": True}
+
+
+def room_members_list(conn, class_id: str) -> list:
+    now = int(time.time())
+    try:
+        conn.execute("DELETE FROM room_members WHERE last_seen < ?", (now - 45,))
+        rows = conn.execute(
+            "SELECT member_key, display_name, role, speaking, last_seen FROM room_members WHERE class_id=? ORDER BY role, display_name",
+            (class_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
+
+
+def board_add_stroke(conn, class_id: str, author_key: str, color: str, points: list) -> dict:
+    if not class_id:
+        raise ValueError("کلاس نامعتبر")
+    color = (color or "#e11d48")[:20]
+    pts = json.dumps(points[:2000]) if not isinstance(points, str) else points[:50000]
+    sid = "S-" + secrets.token_hex(4)
+    conn.execute(
+        "INSERT INTO board_strokes (id, class_id, author_key, color, points, created_at) VALUES (?,?,?,?,?,?)",
+        (sid, class_id, (author_key or "")[:80], color, pts, int(time.time())),
+    )
+    return {"ok": True, "id": sid}
+
+
+def board_list(conn, class_id: str, after: int = 0) -> list:
+    try:
+        rows = conn.execute(
+            "SELECT id, author_key, color, points, created_at FROM board_strokes WHERE class_id=? AND created_at>=? ORDER BY created_at ASC LIMIT 500",
+            (class_id, int(after or 0)),
+        ).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            try:
+                d["points"] = json.loads(d["points"]) if isinstance(d["points"], str) else d["points"]
+            except Exception:
+                d["points"] = []
+            out.append(d)
+        return out
+    except Exception:
+        return []
+
+
+def board_clear(conn, class_id: str) -> dict:
+    conn.execute("DELETE FROM board_strokes WHERE class_id=?", (class_id,))
+    return {"ok": True}
+
+def rtc_post(conn, class_id: str, from_key: str, to_key: str, kind: str, payload) -> dict:
+    import json as _json
+    sid = "R-" + secrets.token_hex(6)
+    body = payload if isinstance(payload, str) else _json.dumps(payload, ensure_ascii=False)
+    conn.execute(
+        "INSERT INTO rtc_signals (id, class_id, from_key, to_key, kind, payload, created_at) VALUES (?,?,?,?,?,?,?)",
+        (sid, class_id, from_key[:80], (to_key or "*")[:80], (kind or "signal")[:40], body[:200000], int(time.time())),
+    )
+    # prune old
+    conn.execute("DELETE FROM rtc_signals WHERE created_at < ?", (int(time.time()) - 120,))
+    return {"ok": True, "id": sid}
+
+
+def rtc_pull(conn, class_id: str, for_key: str, after: int = 0) -> list:
+    import json as _json
+    rows = conn.execute(
+        """SELECT id, from_key, to_key, kind, payload, created_at FROM rtc_signals
+           WHERE class_id=? AND created_at>? AND (to_key=? OR to_key='*' OR to_key='')
+           AND from_key!=?
+           ORDER BY created_at ASC LIMIT 100""",
+        (class_id, int(after or 0), for_key, for_key),
+    ).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["payload"] = _json.loads(d["payload"])
+        except Exception:
+            pass
+        out.append(d)
+    return out
+

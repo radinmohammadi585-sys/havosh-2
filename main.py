@@ -13,6 +13,8 @@ from economy import (
     list_banks, add_bank, list_classes, create_class, add_grade, list_grades,
     add_teacher_message, list_teacher_messages, set_teacher_name,
     buy_class_package, get_package, find_class_by_code, list_books, ensure_package,
+    room_join, room_heartbeat, room_members_list, board_add_stroke, board_list, board_clear,
+    rtc_post, rtc_pull,
 )
 from knowledge.store import (
     ensure_knowledge_tables, ingest_document, search_chunks,
@@ -2134,6 +2136,25 @@ def mask_secret(val: str) -> str:
 
 
 
+
+def economy_conn_work(fn):
+    """Run fn(conn) under lock with tables ensured; return result or raise ValueError."""
+    with lock:
+        conn = db()
+        try:
+            try:
+                ensure_economy_tables(conn)
+                conn.commit()
+            except Exception:
+                pass
+            return fn(conn)
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
 class Handler(BaseHTTPRequestHandler):
 
 
@@ -2533,65 +2554,85 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers(); self.wfile.write(body); return
         
         if path == "/api/market":
-            with lock:
-                conn = db()
-                try:
-                    items = list_market(conn)
-                finally:
-                    conn.close()
-            return self.send_json(200, {"ok": True, "items": items})
+            try:
+                def _fn(c):
+                    return list_market(c)
+                items = economy_conn_work(_fn)
+                return self.send_json(200, {"ok": True, "items": items})
+            except Exception as exc:
+                return self.send_json(200, {"ok": True, "items": [], "error": str(exc)[:200]})
         if path == "/api/shop":
-            with lock:
-                conn = db()
-                try:
-                    items = list_shop(conn)
-                finally:
-                    conn.close()
-            return self.send_json(200, {"ok": True, "items": items})
+            try:
+                items = economy_conn_work(lambda c: list_shop(c))
+                return self.send_json(200, {"ok": True, "items": items})
+            except Exception as exc:
+                return self.send_json(200, {"ok": True, "items": [], "error": str(exc)[:200]})
         if path == "/api/bourse":
-            with lock:
-                conn = db()
-                try:
-                    tick_stocks(conn)
-                    conn.commit()
-                    items = list_stocks(conn)
-                finally:
-                    conn.close()
-            return self.send_json(200, {"ok": True, "symbols": items, "note": "قیمت‌ها شبیه‌سازی آموزشی هستند؛ معامله واقعی نیست."})
+            try:
+                def _b(c):
+                    try:
+                        tick_stocks(c)
+                        c.commit()
+                    except Exception:
+                        pass
+                    return list_stocks(c)
+                items = economy_conn_work(_b)
+                return self.send_json(200, {"ok": True, "symbols": items, "note": "قیمت‌ها شبیه‌سازی آموزشی هستند؛ معامله واقعی نیست."})
+            except Exception as exc:
+                return self.send_json(200, {"ok": True, "symbols": [], "note": "شبیه‌سازی", "error": str(exc)[:200]})
         if path == "/api/banks":
-            with lock:
-                conn = db()
-                try:
-                    items = list_banks(conn)
-                finally:
-                    conn.close()
-            return self.send_json(200, {"ok": True, "banks": items})
+            try:
+                items = economy_conn_work(lambda c: list_banks(c))
+                return self.send_json(200, {"ok": True, "banks": items})
+            except Exception as exc:
+                return self.send_json(200, {"ok": True, "banks": [], "error": str(exc)[:200]})
         if path == "/api/class-books":
-            return self.send_json(200, {"ok": True, "books": list_books()})
+            try:
+                return self.send_json(200, {"ok": True, "books": list_books()})
+            except Exception as exc:
+                return self.send_json(200, {"ok": True, "books": [], "error": str(exc)[:200]})
         if path == "/api/class-package":
-            s = self.session()
-            key = str((s or {}).get("role") or (s or {}).get("username") or "guest")
-            role = str((s or {}).get("role") or "")
-            staff = role == "owner" or role.startswith("teacher") or role.startswith("manager") or role.startswith("deputy")
-            with lock:
-                conn = db()
-                try:
+            try:
+                s = self.session()
+                key = str((s or {}).get("role") or (s or {}).get("username") or "guest")
+                role = str((s or {}).get("role") or "")
+                staff = role == "owner" or role.startswith("teacher") or role.startswith("manager") or role.startswith("deputy")
+                def _pkg(c):
                     if staff:
-                        ensure_package(conn, key, is_staff=True)
-                        conn.commit()
-                    pkg = get_package(conn, key)
-                finally:
-                    conn.close()
-            return self.send_json(200, {"ok": True, "package": pkg, "price_kavosh": 399000, "price_toman": 3990000, "rooms_per_pack": 50, "staffAuto": staff})
-        if path == "/api/classes":
+                        ensure_package(c, key, is_staff=True)
+                        c.commit()
+                    return get_package(c, key)
+                pkg = economy_conn_work(_pkg)
+                return self.send_json(200, {"ok": True, "package": pkg, "price_kavosh": 399000, "price_toman": 3990000, "rooms_per_pack": 50, "staffAuto": staff})
+            except Exception as exc:
+                return self.send_json(200, {"ok": True, "package": {"rooms_total": 0, "rooms_used": 0}, "price_kavosh": 399000, "price_toman": 3990000, "rooms_per_pack": 50, "staffAuto": False, "error": str(exc)[:200]})
 
-            with lock:
-                conn = db()
-                try:
-                    items = list_classes(conn)
-                finally:
-                    conn.close()
-            return self.send_json(200, {"ok": True, "classes": items})
+        if path.startswith("/api/room/members"):
+            from urllib.parse import parse_qs
+            qs = parse_qs(urlparse(self.path).query)
+            cid = (qs.get("classId") or qs.get("class_id") or [""])[0]
+            try:
+                items = economy_conn_work(lambda c: room_members_list(c, cid))
+                return self.send_json(200, {"ok": True, "members": items})
+            except Exception as exc:
+                return self.send_json(200, {"ok": True, "members": [], "error": str(exc)[:200]})
+        if path.startswith("/api/room/board"):
+            from urllib.parse import parse_qs
+            qs = parse_qs(urlparse(self.path).query)
+            cid = (qs.get("classId") or qs.get("class_id") or [""])[0]
+            after = int((qs.get("after") or ["0"])[0] or 0)
+            try:
+                items = economy_conn_work(lambda c: board_list(c, cid, after))
+                return self.send_json(200, {"ok": True, "strokes": items})
+            except Exception as exc:
+                return self.send_json(200, {"ok": True, "strokes": [], "error": str(exc)[:200]})
+
+        if path == "/api/classes":
+            try:
+                items = economy_conn_work(lambda c: list_classes(c))
+                return self.send_json(200, {"ok": True, "classes": items})
+            except Exception as exc:
+                return self.send_json(200, {"ok": True, "classes": [], "error": str(exc)[:200]})
         if path.startswith("/api/classes/") and path.endswith("/grades"):
             cid = path.split("/")[3] if len(path.split("/")) > 3 else ""
             with lock:
@@ -2602,13 +2643,11 @@ class Handler(BaseHTTPRequestHandler):
                     conn.close()
             return self.send_json(200, {"ok": True, "grades": items})
         if path == "/api/teacher-chat":
-            with lock:
-                conn = db()
-                try:
-                    items = list_teacher_messages(conn)
-                finally:
-                    conn.close()
-            return self.send_json(200, {"ok": True, "messages": items})
+            try:
+                items = economy_conn_work(lambda c: list_teacher_messages(c))
+                return self.send_json(200, {"ok": True, "messages": items})
+            except Exception as exc:
+                return self.send_json(200, {"ok": True, "messages": [], "error": str(exc)[:200]})
 
         return self.send_json(404, {"ok": False, "error": "مسیر پیدا نشد."})
 
@@ -3261,6 +3300,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, result)
             except ValueError as exc:
                 return self.send_json(400, {"ok": False, "error": str(exc)})
+            except Exception as e:
+                return self.send_json(500, {"ok": False, "error": str(e)[:300]})
 
         if path == "/api/auth/login-user":
             if not self.rate_allowed():
@@ -3359,6 +3400,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, result)
             except ValueError as exc:
                 return self.send_json(400, {"ok": False, "error": str(exc)})
+            except Exception as exc:
+                return self.send_json(500, {"ok": False, "error": str(exc)[:300]})
 
         if path == "/api/banks":
             s = self.session()
@@ -3376,6 +3419,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, result)
             except ValueError as exc:
                 return self.send_json(400, {"ok": False, "error": str(exc)})
+            except Exception as e:
+                return self.send_json(500, {"ok": False, "error": str(e)[:300]})
 
         if path == "/api/class-package":
             s = self.session()
@@ -3407,12 +3452,89 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(404, {"ok": False, "error": "کد اتاق معتبر نیست."})
             return self.send_json(200, {"ok": True, "class": cls})
 
+
+
+        if path == "/api/room/rtc":
+            try:
+                body = self.read_json(250_000)
+                s = self.session()
+                key = str((s or {}).get("role") or (s or {}).get("username") or body.get("fromKey") or "guest")[:80]
+                cid = str(body.get("classId") or "")
+                action = str(body.get("action") or "post")
+                if action == "pull":
+                    after = int(body.get("after") or 0)
+                    def _p(c):
+                        return {"ok": True, "signals": rtc_pull(c, cid, key, after)}
+                    return self.send_json(200, economy_conn_work(_p))
+                def _po(c):
+                    r = rtc_post(c, cid, key, str(body.get("toKey") or "*"), str(body.get("kind") or "signal"), body.get("payload"))
+                    c.commit()
+                    return r
+                return self.send_json(200, economy_conn_work(_po))
+            except Exception as e:
+                return self.send_json(400, {"ok": False, "error": str(e)[:300]})
+
+        if path == "/api/room/join":
+            try:
+                body = self.read_json(10_000)
+                s = self.session()
+                key = str((s or {}).get("role") or (s or {}).get("username") or body.get("memberKey") or "guest")[:80]
+                name = str(body.get("displayName") or (s or {}).get("display_name") or (s or {}).get("teacher_name") or key)[:80]
+                role = str(body.get("role") or ((s or {}).get("role") if s else "student") or "student")[:40]
+                cid = str(body.get("classId") or body.get("class_id") or "")
+                def _j(c):
+                    r = room_join(c, cid, key, name, role)
+                    c.commit()
+                    return r
+                return self.send_json(200, economy_conn_work(_j))
+            except Exception as e:
+                return self.send_json(400, {"ok": False, "error": str(e)[:300]})
+
+        if path == "/api/room/heartbeat":
+            try:
+                body = self.read_json(5_000)
+                s = self.session()
+                key = str((s or {}).get("role") or (s or {}).get("username") or body.get("memberKey") or "guest")[:80]
+                cid = str(body.get("classId") or "")
+                speaking = 1 if body.get("speaking") else 0
+                def _h(c):
+                    r = room_heartbeat(c, cid, key, speaking)
+                    c.commit()
+                    return {"ok": True, "members": room_members_list(c, cid)}
+                return self.send_json(200, economy_conn_work(_h))
+            except Exception as e:
+                return self.send_json(200, {"ok": True, "members": []})
+
+        if path == "/api/room/board":
+            try:
+                body = self.read_json(200_000)
+                s = self.session()
+                key = str((s or {}).get("role") or (s or {}).get("username") or "guest")[:80]
+                cid = str(body.get("classId") or "")
+                if body.get("action") == "clear":
+                    def _cl(c):
+                        r = board_clear(c, cid)
+                        c.commit()
+                        return r
+                    return self.send_json(200, economy_conn_work(_cl))
+                color = str(body.get("color") or "#e11d48")
+                points = body.get("points") or []
+                def _st(c):
+                    r = board_add_stroke(c, cid, key, color, points)
+                    c.commit()
+                    return r
+                return self.send_json(200, economy_conn_work(_st))
+            except ValueError as e:
+                return self.send_json(400, {"ok": False, "error": str(e)})
+            except Exception as e:
+                return self.send_json(500, {"ok": False, "error": str(e)[:300]})
+
         if path == "/api/classes":
             s = self.session()
             if not s:
                 return self.send_json(401, {"ok": False, "error": "ورود لازم است."})
             role = str(s.get("role") or "")
-            if not (role == "owner" or role.startswith("teacher") or role.startswith("manager") or role.startswith("user:")):
+            if not (role == "owner" or role.startswith("teacher") or role.startswith("manager") or role.startswith("deputy") or role.startswith("user:")):
                 return self.send_json(403, {"ok": False, "error": "دسترسی کلاس ندارید."})
             try:
                 body = self.read_json(20_000)
@@ -3437,6 +3559,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, result)
             except ValueError as exc:
                 return self.send_json(400, {"ok": False, "error": str(exc)})
+            except Exception as exc:
+                return self.send_json(500, {"ok": False, "error": "خطای ساخت اتاق: " + str(exc)[:300]})
 
         if path == "/api/grades":
             s = self.session()
@@ -3465,6 +3589,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, result)
             except ValueError as exc:
                 return self.send_json(400, {"ok": False, "error": str(exc)})
+            except Exception as e:
+                return self.send_json(500, {"ok": False, "error": str(e)[:300]})
 
         if path == "/api/teacher-chat":
             s = self.session()
