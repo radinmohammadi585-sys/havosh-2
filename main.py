@@ -12,7 +12,7 @@ from economy import (
     list_market, add_market_listing, list_shop, list_stocks, tick_stocks,
     list_banks, add_bank, list_classes, create_class, add_grade, list_grades,
     add_teacher_message, list_teacher_messages, set_teacher_name,
-    buy_class_package, get_package, find_class_by_code, list_books, ensure_package, delete_class, holdings_for, set_or_add_holding, transfer_shares,
+    buy_class_package, get_package, find_class_by_code, list_books, ensure_package, delete_class, holdings_for, set_or_add_holding, transfer_shares, teacher_grant_shares, is_teacher_role,
     room_join, room_heartbeat, room_members_list, board_add_stroke, board_list, board_clear,
     rtc_post, rtc_pull,
 )
@@ -2579,6 +2579,30 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 return self.send_json(500, {"ok": False, "error": str(e)[:300]})
 
+        if path == "/api/bourse/teacher-grant":
+            s = self.session()
+            if not s:
+                return self.send_json(401, {"ok": False, "error": "ورود لازم است."})
+            role = str(s.get("role") or "")
+            if not is_teacher_role(role):
+                return self.send_json(403, {"ok": False, "error": "فقط معلم/مدیر."})
+            try:
+                body = self.read_json(10_000)
+                def _tg(c):
+                    r = teacher_grant_shares(
+                        c, role,
+                        str(body.get("student") or body.get("to") or ""),
+                        str(body.get("symbol") or ""),
+                        float(body.get("percent") or 0),
+                    )
+                    c.commit()
+                    return r
+                return self.send_json(200, economy_conn_work(_tg))
+            except ValueError as e:
+                return self.send_json(400, {"ok": False, "error": str(e)})
+            except Exception as e:
+                return self.send_json(500, {"ok": False, "error": str(e)[:300]})
+
         if path == "/api/bourse/transfer":
             s = self.session()
             if not s:
@@ -3345,16 +3369,14 @@ class Handler(BaseHTTPRequestHandler):
             u = str(body.get("username") or "")
             p = str(body.get("password") or "")
             p2 = str(body.get("password2") or body.get("passwordConfirm") or "")
-            if p != p2:
+            if p2 and p != p2:
                 return self.send_json(400, {"ok": False, "error": "تکرار رمز عبور یکسان نیست."})
             try:
-                with lock:
-                    conn = db()
-                    try:
-                        result = register_user(conn, u, p)
-                        conn.commit()
-                    finally:
-                        conn.close()
+                def _reg(c):
+                    r = register_user(c, u, p)
+                    c.commit()
+                    return r
+                result = economy_conn_work(_reg)
                 return self.send_json(200, result)
             except ValueError as exc:
                 return self.send_json(400, {"ok": False, "error": str(exc)})
@@ -3449,8 +3471,10 @@ class Handler(BaseHTTPRequestHandler):
                             conn, seller_key, seller_name,
                             str(body.get("title") or ""),
                             str(body.get("description") or ""),
-                            body.get("price"),
+                            body.get("price") or 0,
                             str(body.get("currency") or "kavosh"),
+                            body.get("sharePercent") or body.get("share_percent") or 0,
+                            str(body.get("shareSymbol") or body.get("share_symbol") or ""),
                         )
                         conn.commit()
                     finally:

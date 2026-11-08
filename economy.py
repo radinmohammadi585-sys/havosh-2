@@ -46,6 +46,8 @@ def ensure_economy_tables(conn) -> None:
             description TEXT,
             price REAL NOT NULL,
             currency TEXT NOT NULL,
+            share_percent REAL DEFAULT 0,
+            share_symbol TEXT,
             status TEXT DEFAULT 'active',
             created_at INTEGER NOT NULL
         );
@@ -185,18 +187,31 @@ def ensure_economy_tables(conn) -> None:
 
 
 def register_user(conn, username: str, password: str) -> dict:
-    username = re.sub(r"[^a-zA-Z0-9_\u0600-\u06FF]", "", (username or "").strip())[:32]
+    try:
+        ensure_economy_tables(conn)
+    except Exception:
+        pass
+    raw = (username or "").strip()
+    # حروف فارسی/انگلیسی، عدد، خط زیر
+    username = re.sub(r"[^\w؀-ۿ]", "", raw, flags=re.UNICODE)[:32]
     if len(username) < 3:
-        raise ValueError("نام کاربری حداقل ۳ کاراکتر باشد.")
-    if len(password or "") < 6:
-        raise ValueError("رمز عبور حداقل ۶ کاراکتر باشد.")
-    if conn.execute("SELECT id FROM app_users WHERE username=?", (username,)).fetchone():
+        raise ValueError("نام کاربری حداقل ۳ کاراکتر (حرف یا عدد) باشد.")
+    if len(password or "") < 4:
+        raise ValueError("رمز عبور حداقل ۴ کاراکتر باشد.")
+    try:
+        exists = conn.execute("SELECT id FROM app_users WHERE username=?", (username,)).fetchone()
+    except Exception as e:
+        raise ValueError("جدول کاربران آماده نیست: " + str(e)[:120])
+    if exists:
         raise ValueError("این نام کاربری قبلاً ثبت شده است.")
     uid = "U-" + secrets.token_hex(4).upper()
-    conn.execute(
-        "INSERT INTO app_users (id, username, password_hash, display_name, role, balance_kavosh, created_at) VALUES (?,?,?,?,?,?,?)",
-        (uid, username, _hash_password(password), username, "member", 0, int(time.time())),
-    )
+    try:
+        conn.execute(
+            "INSERT INTO app_users (id, username, password_hash, display_name, role, balance_kavosh, created_at) VALUES (?,?,?,?,?,?,?)",
+            (uid, username, _hash_password(password), username, "member", 0, int(time.time())),
+        )
+    except Exception as e:
+        raise ValueError("ثبت نشد: " + str(e)[:200])
     return {"ok": True, "id": uid, "username": username}
 
 
@@ -220,25 +235,42 @@ def list_market(conn, limit: int = 50) -> list:
         return []
 
 
-def add_market_listing(conn, seller_key: str, seller_name: str, title: str, description: str, price: float, currency: str) -> dict:
+def add_market_listing(conn, seller_key: str, seller_name: str, title: str, description: str, price: float, currency: str, share_percent: float = 0, share_symbol: str = "") -> dict:
     title = (title or "").strip()[:120]
     if not title:
         raise ValueError("عنوان لازم است.")
     currency = (currency or "kavosh").lower()
-    if currency not in ("kavosh", "toman"):
+    if currency not in ("kavosh", "toman", "share"):
         currency = "kavosh"
     try:
         price = float(price)
     except Exception:
         raise ValueError("قیمت نامعتبر است.")
-    if price <= 0:
-        raise ValueError("قیمت باید مثبت باشد.")
+    if price < 0:
+        raise ValueError("قیمت نامعتبر است.")
+    try:
+        share_percent = float(share_percent or 0)
+    except Exception:
+        share_percent = 0.0
+    if share_percent < 0 or share_percent > 1000:
+        raise ValueError("سهمیه خرید باید بین ۰ و ۱۰۰۰ باشد.")
+    share_symbol = (share_symbol or "").strip().upper()[:20]
+    if share_percent > 0 and not share_symbol:
+        share_symbol = "EDU"
+    if price <= 0 and share_percent <= 0:
+        raise ValueError("حداقل قیمت پول یا سهمیه خرید را مشخص کنید.")
     lid = "M-" + secrets.token_hex(4).upper()
-    conn.execute(
-        "INSERT INTO market_listings (id, seller_key, seller_name, title, description, price, currency, status, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
-        (lid, seller_key, (seller_name or seller_key)[:80], title, (description or "")[:2000], price, currency, "active", int(time.time())),
-    )
-    return {"ok": True, "id": lid}
+    try:
+        conn.execute(
+            "INSERT INTO market_listings (id, seller_key, seller_name, title, description, price, currency, share_percent, share_symbol, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (lid, seller_key, (seller_name or seller_key)[:80], title, (description or "")[:2000], price, currency, share_percent, share_symbol, "active", int(time.time())),
+        )
+    except Exception:
+        conn.execute(
+            "INSERT INTO market_listings (id, seller_key, seller_name, title, description, price, currency, status, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            (lid, seller_key, (seller_name or seller_key)[:80], title, (description or "")[:2000], max(price, 0.01), currency if currency != "share" else "kavosh", "active", int(time.time())),
+        )
+    return {"ok": True, "id": lid, "share_percent": share_percent, "share_symbol": share_symbol}
 
 
 def list_shop(conn) -> list:
@@ -766,8 +798,12 @@ def transfer_shares(conn, from_key: str, to_key: str, symbol_id: str, percent: f
         (from_key, symbol_id),
     ).fetchone()
     have = float(row["percent"]) if row else 0.0
-    if have < percent:
+    # معلمان سهمیه بی‌نهایت دارند
+    infinite = is_teacher_role(from_key) or str(from_key).startswith("teacher") or str(from_key).startswith("manager") or from_key == "owner"
+    if not infinite and have < percent:
         raise ValueError(f"سهمیه کافی نیست. موجودی شما: {have}%")
+    if infinite and have < percent:
+        have = percent  # mint
     now = int(time.time())
     new_from = have - percent
     if new_from <= 0 and row:
@@ -790,3 +826,20 @@ def transfer_shares(conn, from_key: str, to_key: str, symbol_id: str, percent: f
         )
     return {"ok": True, "from": from_key, "to": to_key, "symbol_id": symbol_id, "percent": percent, "remaining": max(0.0, new_from)}
 
+
+
+def is_teacher_role(role: str) -> bool:
+    r = (role or "")
+    return r == "owner" or r.startswith("teacher") or r.startswith("manager") or r.startswith("deputy")
+
+
+def teacher_grant_shares(conn, teacher_key: str, student_key: str, symbol_id: str, percent: float) -> dict:
+    """Teachers have infinite quota — grant any amount 0-1000 to a student account."""
+    if not is_teacher_role(teacher_key) and not str(teacher_key).startswith("teacher"):
+        # allow if caller marked as teacher via role string
+        if not (teacher_key == "owner" or str(teacher_key).startswith("manager")):
+            raise ValueError("فقط معلم/مدیر می‌تواند سهمیه نامحدود بدهد.")
+    student_key = (student_key or "").strip()[:80]
+    if not student_key:
+        raise ValueError("حساب دانش‌آموز لازم است.")
+    return set_or_add_holding(conn, student_key, symbol_id, percent)
