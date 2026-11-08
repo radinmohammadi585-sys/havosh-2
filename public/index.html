@@ -531,6 +531,16 @@ int main() {
             <button type="button" class="btn" id="grHoldBtn">ثبت سهمیه</button>
             <div id="grHoldMsg"></div>
           </div>
+          <hr style="border-color:var(--line);margin:14px 0">
+          <h3>🎁 سهمیه معلم → دانش‌آموز (نامحدود)</h3>
+          <p style="font-size:12px;color:var(--muted)">معلمان و مدیران سهمیه بی‌نهایت دارند و هر وقت بخواهند به دانش‌آموز می‌دهند.</p>
+          <div class="form-grid">
+            <label>حساب دانش‌آموز <input type="text" id="tgStudent" placeholder="student5 یا نام کاربری"></label>
+            <label>نماد <input type="text" id="tgSymbol" value="EDU"></label>
+            <label>درصد (۰ تا ۱۰۰۰) <input type="number" id="tgPercent" min="0" max="1000" value="50"></label>
+            <button type="button" class="btn btn-primary" id="tgBtn">دادن سهمیه</button>
+            <div id="tgMsg"></div>
+          </div>
         </div>
       </div>
     </section>
@@ -549,6 +559,8 @@ int main() {
             <select id="mktCur"><option value="kavosh">کاوش</option><option value="toman">تومان</option></select>
           </label>
           <label>نام فروشنده (اگر وارد نشده‌اید) <input type="text" id="mktSeller" placeholder="اختیاری"></label>
+          <label>سهمیه برای خرید (۰ تا ۱۰۰۰، اختیاری) <input type="number" id="mktSharePercent" min="0" max="1000" step="0.1" value="0"></label>
+          <label>نماد سهمیه <input type="text" id="mktShareSymbol" placeholder="EDU" value="EDU"></label>
           <button class="btn btn-primary" type="button" id="mktPostBtn">انتشار آگهی</button>
           <div id="mktMsg"></div>
         </div>
@@ -2321,16 +2333,21 @@ async function loadBourse(){
   } catch(e) {}
 }
 async function loadMarket(){
-  const box = $('mktList'); if (!box) return;
-  const {data} = await api('/api/market');
-  if (!data.ok) { box.innerHTML = '<div class="empty">خطا</div>'; return; }
-  const items = data.items||[];
-  box.innerHTML = items.length ? items.map(i =>
-    `<div class="card"><h3>${escapeHtml(i.title)}</h3>
-     <p style="font-size:13px;color:var(--muted)">${escapeHtml(i.description||'')}</p>
-     <p><strong>${escapeHtml(String(i.price))}</strong> ${i.currency==='toman'?'تومان':'کاوش'}</p>
-     <p class="badge">${escapeHtml(i.seller_name||i.seller_key||'')}</p></div>`
-  ).join('') : '<div class="empty">آگهی نیست</div>';
+  const box = $('marketList');
+  if (!box) return;
+  try {
+    const {data} = await api('/api/market');
+    const items = data.items || [];
+    box.innerHTML = items.length ? items.map(it => {
+      const share = (it.share_percent && Number(it.share_percent) > 0)
+        ? (' · سهمیه: ' + it.share_percent + '% ' + (it.share_symbol || ''))
+        : '';
+      return '<div class="card" style="padding:12px;margin-bottom:8px"><strong>' + escapeHtml(it.title) + '</strong>'
+        + '<p style="font-size:12px;color:var(--muted)">' + escapeHtml(it.description||'') + '</p>'
+        + '<p>قیمت: ' + escapeHtml(String(it.price)) + ' ' + escapeHtml(it.currency||'') + escapeHtml(share) + '</p>'
+        + '<p style="font-size:12px">فروشنده: ' + escapeHtml(it.seller_name||it.seller_key||'') + '</p></div>';
+    }).join('') : '<div class="empty">آگهی نیست</div>';
+  } catch(e) { box.innerHTML = '<div class="alert err">خطا</div>'; }
 }
 $('mktPostBtn') && $('mktPostBtn').addEventListener('click', async () => {
   const body = {
@@ -2545,9 +2562,39 @@ $('teacherNameBtn') && $('teacherNameBtn').addEventListener('click', async () =>
   $('teacherNameMsg').innerHTML = data.ok ? '<div class="alert ok">ذخیره شد</div>' : `<div class="alert err">${escapeHtml(data.error||'')}</div>`;
   if (data.ok && user) { user.needTeacherName = false; user.teacher_name = data.teacher_name; $('teacherNameGate').style.display='none'; }
 });
-$('regBtn') && $('regBtn').addEventListener('click', async () => {
-  const {data} = await api('/api/auth/register', {method:'POST', body: JSON.stringify({username:$('regUsername').value, password:$('regPassword').value, password2:$('regPassword2').value})});
-  $('regMsg').innerHTML = data.ok ? '<div class="alert ok">حساب ساخته شد؛ وارد شوید</div>' : `<div class="alert err">${escapeHtml(data.error||'')}</div>`;
+if ($('regBtn')) $('regBtn').addEventListener('click', async () => {
+  const u = ($('regUsername') && $('regUsername').value || '').trim();
+  const p = ($('regPassword') && $('regPassword').value) || '';
+  const p2 = ($('regPassword2') && $('regPassword2').value) || '';
+  const msg = $('regMsg');
+  if (!u || u.length < 3) {
+    if (msg) msg.innerHTML = '<div class="alert err">نام کاربری حداقل ۳ کاراکتر</div>';
+    return;
+  }
+  if (!p || p.length < 4) {
+    if (msg) msg.innerHTML = '<div class="alert err">رمز حداقل ۴ کاراکتر</div>';
+    return;
+  }
+  if (p2 && p !== p2) {
+    if (msg) msg.innerHTML = '<div class="alert err">تکرار رمز یکسان نیست</div>';
+    return;
+  }
+  if (msg) msg.innerHTML = '<div class="alert">در حال ساخت حساب…</div>';
+  const {data, status} = await api('/api/auth/register', {method:'POST', body: JSON.stringify({username:u, password:p, password2:p2 || p})});
+  if (data && data.ok) {
+    if (msg) msg.innerHTML = '<div class="alert ok">حساب ساخته شد — در حال ورود…</div>';
+    const login = await api('/api/auth/login-user', {method:'POST', body: JSON.stringify({username:u, password:p})});
+    if (login.data && login.data.ok && login.data.token) {
+      token = login.data.token;
+      localStorage.setItem(TOKEN_KEY, token);
+      user = {role: login.data.role, username: login.data.username, display_name: login.data.display_name};
+      if (typeof updateAuthUI === 'function') updateAuthUI();
+      if (msg) msg.innerHTML = '<div class="alert ok">حساب ساخته شد و وارد شدید ✓</div>';
+      if (typeof closeAuthModal === 'function') closeAuthModal();
+    } else if (msg) msg.innerHTML = '<div class="alert ok">حساب ساخته شد؛ از بخش ورود وارد شوید</div>';
+  } else if (msg) {
+    msg.innerHTML = '<div class="alert err">' + escapeHtml((data && data.error) || ('خطا ' + (status||''))) + '</div>';
+  }
 });
 $('userLoginBtn') && $('userLoginBtn').addEventListener('click', async () => {
   const {data} = await api('/api/auth/login-user', {method:'POST', body: JSON.stringify({username:$('userLoginName').value, password:$('userLoginPass').value})});
@@ -3048,6 +3095,15 @@ async function loadRoomChat() {
 window.__openSkyRoom = function(c) { openLocalRoom(c); loadRoomChat(); };
 
 
+if ($('tgBtn')) $('tgBtn').addEventListener('click', async () => {
+  const {data} = await api('/api/bourse/teacher-grant', {method:'POST', body: JSON.stringify({
+    student: $('tgStudent') && $('tgStudent').value,
+    symbol: $('tgSymbol') && $('tgSymbol').value,
+    percent: $('tgPercent') && $('tgPercent').value
+  })});
+  $('tgMsg').innerHTML = data.ok ? '<div class="alert ok">سهمیه به دانش‌آموز داده شد</div>' : ('<div class="alert err">' + escapeHtml(data.error||'') + '</div>');
+  if (data.ok) loadBourse();
+});
 if ($('tfBtn')) $('tfBtn').addEventListener('click', async () => {
   const {data} = await api('/api/bourse/transfer', {method:'POST', body: JSON.stringify({
     symbol: $('tfSymbol') && $('tfSymbol').value,
