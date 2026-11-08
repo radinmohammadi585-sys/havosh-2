@@ -2562,49 +2562,6 @@ $('teacherNameBtn') && $('teacherNameBtn').addEventListener('click', async () =>
   $('teacherNameMsg').innerHTML = data.ok ? '<div class="alert ok">ذخیره شد</div>' : `<div class="alert err">${escapeHtml(data.error||'')}</div>`;
   if (data.ok && user) { user.needTeacherName = false; user.teacher_name = data.teacher_name; $('teacherNameGate').style.display='none'; }
 });
-if ($('regBtn')) $('regBtn').addEventListener('click', async () => {
-  const u = ($('regUsername') && $('regUsername').value || '').trim();
-  const p = ($('regPassword') && $('regPassword').value) || '';
-  const p2 = ($('regPassword2') && $('regPassword2').value) || '';
-  const msg = $('regMsg');
-  if (!u || u.length < 3) {
-    if (msg) msg.innerHTML = '<div class="alert err">نام کاربری حداقل ۳ کاراکتر</div>';
-    return;
-  }
-  if (!p || p.length < 4) {
-    if (msg) msg.innerHTML = '<div class="alert err">رمز حداقل ۴ کاراکتر</div>';
-    return;
-  }
-  if (p2 && p !== p2) {
-    if (msg) msg.innerHTML = '<div class="alert err">تکرار رمز یکسان نیست</div>';
-    return;
-  }
-  if (msg) msg.innerHTML = '<div class="alert">در حال ساخت حساب…</div>';
-  const {data, status} = await api('/api/auth/register', {method:'POST', body: JSON.stringify({username:u, password:p, password2:p2 || p})});
-  if (data && data.ok) {
-    if (msg) msg.innerHTML = '<div class="alert ok">حساب ساخته شد — در حال ورود…</div>';
-    const login = await api('/api/auth/login-user', {method:'POST', body: JSON.stringify({username:u, password:p})});
-    if (login.data && login.data.ok && login.data.token) {
-      token = login.data.token;
-      localStorage.setItem(TOKEN_KEY, token);
-      user = {role: login.data.role, username: login.data.username, display_name: login.data.display_name};
-      if (typeof updateAuthUI === 'function') updateAuthUI();
-      if (msg) msg.innerHTML = '<div class="alert ok">حساب ساخته شد و وارد شدید ✓</div>';
-      if (typeof closeAuthModal === 'function') closeAuthModal();
-    } else if (msg) msg.innerHTML = '<div class="alert ok">حساب ساخته شد؛ از بخش ورود وارد شوید</div>';
-  } else if (msg) {
-    msg.innerHTML = '<div class="alert err">' + escapeHtml((data && data.error) || ('خطا ' + (status||''))) + '</div>';
-  }
-});
-$('userLoginBtn') && $('userLoginBtn').addEventListener('click', async () => {
-  const {data} = await api('/api/auth/login-user', {method:'POST', body: JSON.stringify({username:$('userLoginName').value, password:$('userLoginPass').value})});
-  if (data.ok && data.token) {
-    token = data.token; localStorage.setItem('kavosh_token', token);
-    user = {role: data.role, username: data.username, display_name: data.display_name, needTeacherName: !!data.needTeacherName, teacher_name: data.teacher_name};
-    $('userLoginMsg').innerHTML = '<div class="alert ok">وارد شدید</div>';
-    refreshMe && refreshMe();
-  } else $('userLoginMsg').innerHTML = `<div class="alert err">${escapeHtml(data.error||'خطا')}</div>`;
-});
 
 // top model select sync with chatMode
 (function(){
@@ -3130,6 +3087,70 @@ if ($('openAuthModal')) $('openAuthModal').addEventListener('click', openAuthMod
 if ($('authModalClose')) $('authModalClose').addEventListener('click', closeAuthModal);
 if ($('authModal')) $('authModal').addEventListener('click', (e) => { if (e.target === $('authModal')) closeAuthModal(); });
 if ($('logoutBtnProfile')) $('logoutBtnProfile').addEventListener('click', () => { if ($('logoutBtn')) $('logoutBtn').click(); });
+
+
+/* Auth buttons — event delegation (modal may be after script) */
+async function doRegisterAccount() {
+  const u = (($('regUsername') && $('regUsername').value) || '').trim();
+  const p = ($('regPassword') && $('regPassword').value) || '';
+  const p2 = ($('regPassword2') && $('regPassword2').value) || '';
+  const msg = $('regMsg');
+  if (!u || u.length < 3) { if (msg) msg.innerHTML = '<div class="alert err">نام کاربری حداقل ۳ کاراکتر</div>'; return; }
+  if (!p || p.length < 4) { if (msg) msg.innerHTML = '<div class="alert err">رمز حداقل ۴ کاراکتر</div>'; return; }
+  if (p2 && p !== p2) { if (msg) msg.innerHTML = '<div class="alert err">تکرار رمز یکسان نیست</div>'; return; }
+  if (msg) msg.innerHTML = '<div class="alert">در حال ساخت حساب…</div>';
+  try {
+    const {data, status} = await api('/api/auth/register', {method:'POST', body: JSON.stringify({username:u, password:p, password2:p2 || p})});
+    if (data && data.ok) {
+      if (msg) msg.innerHTML = '<div class="alert ok">حساب ساخته شد — ورود…</div>';
+      const login = await api('/api/auth/login-user', {method:'POST', body: JSON.stringify({username:u, password:p})});
+      if (login.data && login.data.ok && login.data.token) {
+        token = login.data.token;
+        localStorage.setItem(TOKEN_KEY, token);
+        user = {role: login.data.role, username: login.data.username, display_name: login.data.display_name};
+        if (typeof updateAuthUI === 'function') updateAuthUI();
+        if (msg) msg.innerHTML = '<div class="alert ok">حساب ساخته شد و وارد شدید ✓</div>';
+        if (typeof closeAuthModal === 'function') closeAuthModal();
+      } else if (msg) msg.innerHTML = '<div class="alert ok">حساب ساخته شد؛ از ورود حساب وارد شوید</div>';
+    } else if (msg) msg.innerHTML = '<div class="alert err">' + escapeHtml((data && data.error) || ('خطا ' + (status||''))) + '</div>';
+  } catch (e) {
+    if (msg) msg.innerHTML = '<div class="alert err">خطای شبکه</div>';
+    console.error(e);
+  }
+}
+
+async function doUserLogin() {
+  const u = (($('userLoginName') && $('userLoginName').value) || '').trim();
+  const p = ($('userLoginPass') && $('userLoginPass').value) || '';
+  const msg = $('userLoginMsg');
+  if (!u || !p) { if (msg) msg.innerHTML = '<div class="alert err">نام کاربری و رمز را وارد کنید</div>'; return; }
+  if (msg) msg.innerHTML = '<div class="alert">در حال ورود…</div>';
+  try {
+    const {data} = await api('/api/auth/login-user', {method:'POST', body: JSON.stringify({username:u, password:p})});
+    if (data && data.ok && data.token) {
+      token = data.token;
+      localStorage.setItem(TOKEN_KEY, token);
+      user = {role: data.role, username: data.username, display_name: data.display_name, needTeacherName: !!data.needTeacherName, teacher_name: data.teacher_name};
+      if (typeof updateAuthUI === 'function') updateAuthUI();
+      if (msg) msg.innerHTML = '<div class="alert ok">وارد شدید ✓</div>';
+      if (typeof closeAuthModal === 'function') closeAuthModal();
+    } else if (msg) msg.innerHTML = '<div class="alert err">' + escapeHtml((data && data.error) || 'خطا') + '</div>';
+  } catch (e) {
+    if (msg) msg.innerHTML = '<div class="alert err">خطای شبکه</div>';
+  }
+}
+
+document.addEventListener('click', function(ev) {
+  const t = ev.target;
+  if (!t) return;
+  const id = t.id || (t.closest && t.closest('button') && t.closest('button').id);
+  if (id === 'regBtn' || (t.closest && t.closest('#regBtn'))) { ev.preventDefault(); doRegisterAccount(); }
+  if (id === 'userLoginBtn' || (t.closest && t.closest('#userLoginBtn'))) { ev.preventDefault(); doUserLogin(); }
+  if (id === 'openAuthModal') { if (typeof openAuthModal === 'function') openAuthModal(); }
+  if (id === 'authModalClose') { if (typeof closeAuthModal === 'function') closeAuthModal(); }
+  if (id === 'loginBtn') { /* role login keeps its own listener if present */ }
+});
+
 
 /* init */
 try { applyI18n(); } catch(e) { console.error(e); }
