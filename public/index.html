@@ -220,7 +220,7 @@ background:linear-gradient(135deg,#6b8cff,#9b7dff);border:none;color:#fff;font-s
       <div class="orb"></div>
       <div>
         <h1 data-i18n="brand">کاوش AI 2</h1>
-        <p style="font-size:10px;color:var(--muted)">UI: 2026-11-07-STABLE</p>
+        <p style="font-size:10px;color:var(--muted)">UI: 2026-11-08-LOCAL</p>
         <p data-i18n="tagline">دستیار هوشمند فضایی</p>
       </div>
     <div id="uiVersion" style="font-size:11px;color:#5eead4;margin-top:6px;font-weight:700">نسخه UI: 2026-10-25-C · کاوش‌ویدیو+اخبار</div></div>
@@ -2391,22 +2391,10 @@ async function loadClasses(){
     const {data} = await api('/api/classes');
     const box = $('classList');
     const openSkyRoom = (c) => {
-      const meet = (c && c.meet_url) ? c.meet_url : ('https://meet.jit.si/Kavosh-' + ((c && c.id) || 'room'));
-      const code = (c && c.join_code) || '';
-      if ($('skyRoomTitle')) $('skyRoomTitle').textContent = 'اتاق: ' + ((c && c.title) || '');
-      if ($('skyRoomId')) $('skyRoomId').textContent = 'شناسه: ' + ((c && c.id) || '');
-      if ($('skyRoomTeacher')) $('skyRoomTeacher').textContent = 'معلم: ' + ((c && (c.teacher_name || c.teacher_key)) || '');
-      if ($('skyRoomCode')) $('skyRoomCode').textContent = 'کد: ' + code;
-      if ($('skyInviteCode')) $('skyInviteCode').textContent = code || meet;
-      if ($('liveMeetLink')) $('liveMeetLink').href = meet;
-      window.__skyMeetUrl = meet;
-      window.__skyJoinCode = code;
-      window.__skyClass = c;
-      if ($('liveClassBox')) $('liveClassBox').style.display = '';
-      /* liveEmbed removed — local room */
-      if ($('liveClassBox')) $('liveClassBox').scrollIntoView({behavior:'smooth'});
+      if (typeof openLocalRoom === 'function') openLocalRoom(c);
+      if (typeof loadRoomChat === 'function') loadRoomChat();
     };
-    window.__openSkyRoom = function(c){ openLocalRoom(c); loadRoomChat(); };
+    window.__openSkyRoom = openSkyRoom;
     if (box) {
       const list = (data && data.classes) || [];
       if (!list.length) {
@@ -2415,7 +2403,7 @@ async function loadClasses(){
         const byId = {};
         list.forEach(c => { byId[c.id] = c; });
         box.innerHTML = list.map(c => {
-          const meet = c.meet_url || ('https://meet.jit.si/Kavosh-' + c.id);
+          const meet = '';
           const book = c.book_id ? (' · کتاب: ' + c.book_id) : '';
           return '<div class="card" style="padding:14px">'
             + '<h3 style="margin-top:0">' + escapeHtml(c.title) + '</h3>'
@@ -2426,7 +2414,8 @@ async function loadClasses(){
             + '<div class="sky-actions">'
             + '<button type="button" class="btn btn-primary" data-sky-join="' + escapeHtml(c.id) + '">ورود به اتاق</button>'
             + '<button type="button" class="btn" data-copy-code="' + escapeHtml(c.join_code || '') + '">کپی کد</button>'
-            + '<a class="btn btn-ghost" href="' + escapeHtml(meet) + '" target="_blank" rel="noopener">لینک مستقیم</a>'
+            + '<button type="button" class="btn btn-ghost" data-del-class="' + escapeHtml(c.id) + '" style="color:#f87171">حذف اتاق</button>'
+            + ''
             + '</div></div>';
         }).join('');
         box.querySelectorAll('[data-sky-join]').forEach(btn => {
@@ -2436,6 +2425,17 @@ async function loadClasses(){
           btn.addEventListener('click', async () => {
             const u = btn.getAttribute('data-copy-code');
             try { await navigator.clipboard.writeText(u); alert('کد کپی شد: ' + u); } catch(e) { prompt('کد:', u); }
+          });
+        });
+        box.querySelectorAll('[data-del-class]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            if (!confirm('این اتاق حذف شود؟')) return;
+            const id = btn.getAttribute('data-del-class');
+            const {data} = await api('/api/classes/delete', {method:'POST', body: JSON.stringify({classId: id})});
+            if (data.ok) {
+              if (window.__room && window.__room.classId === id && typeof stopLocalRoom === 'function') stopLocalRoom();
+              loadClasses();
+            } else alert(data.error || 'حذف نشد');
           });
         });
       }
@@ -2474,10 +2474,8 @@ if ($('joinCodeBtn')) $('joinCodeBtn').addEventListener('click', async () => {
   if (data.ok && data.class) {
     $('joinMsg').innerHTML = '<div class="alert ok">وارد شدید</div>';
     if (typeof window.__openSkyRoom === 'function') window.__openSkyRoom(data.class);
-    else if ($('liveEmbed')) {
-      $('liveEmbed').src = data.class.meet_url;
-      $('liveClassBox').style.display = '';
-    }
+    else if (typeof openLocalRoom === 'function') openLocalRoom(data.class);
+
   } else {
     $('joinMsg').innerHTML = '<div class="alert err">' + escapeHtml(data.error||'کد نامعتبر') + '</div>';
   }
@@ -2507,16 +2505,15 @@ if ($('skyCopyCode')) $('skyCopyCode').addEventListener('click', async () => {
 
 function bindSkyRoomControls(){
   if ($('skyCopyInvite')) $('skyCopyInvite').addEventListener('click', async () => {
-    const u = window.__skyMeetUrl || '';
-    try { await navigator.clipboard.writeText(u); alert('لینک کپی شد'); } catch(e) { prompt('لینک', u); }
+    const u = window.__skyJoinCode || (window.__skyClass && window.__skyClass.join_code) || '';
+    try { await navigator.clipboard.writeText(u); alert('کد اتاق: ' + u); } catch(e) { prompt('کد', u); }
   });
   if ($('skyJoinMic')) $('skyJoinMic').addEventListener('click', () => {
-    if ($('liveEmbed') && window.__skyMeetUrl) $('liveEmbed').src = window.__skyMeetUrl;
-    alert('اجازه میکروفون/دوربین/اشتراک صفحه را در مرورگر بدهید.');
+    if (typeof enableMic === 'function') enableMic();
   });
   if ($('skyCloseRoom')) $('skyCloseRoom').addEventListener('click', () => {
-    if ($('liveEmbed')) $('liveEmbed').src = 'about:blank';
-    if ($('liveClassBox')) $('liveClassBox').style.display = 'none';
+    if (typeof stopLocalRoom === 'function') stopLocalRoom();
+    else if ($('liveClassBox')) $('liveClassBox').style.display = 'none';
   });
 }
 bindSkyRoomControls();
