@@ -10,6 +10,13 @@ import time
 from typing import Any
 
 
+
+def normalize_username(username: str) -> str:
+    raw = (username or "").strip()
+    # حروف لاتین، عدد، _ و حروف فارسی
+    cleaned = re.sub(r"[^a-zA-Z0-9_؀-ۿ]", "", raw)
+    return cleaned[:32]
+
 def _hash_password(password: str, salt: str | None = None) -> str:
     salt = salt or secrets.token_hex(16)
     dig = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 120_000)
@@ -191,9 +198,7 @@ def register_user(conn, username: str, password: str) -> dict:
         ensure_economy_tables(conn)
     except Exception:
         pass
-    raw = (username or "").strip()
-    # حروف فارسی/انگلیسی، عدد، خط زیر
-    username = re.sub(r"[^\w؀-ۿ]", "", raw, flags=re.UNICODE)[:32]
+    username = normalize_username(username)
     if len(username) < 3:
         raise ValueError("نام کاربری حداقل ۳ کاراکتر (حرف یا عدد) باشد.")
     if len(password or "") < 4:
@@ -201,7 +206,7 @@ def register_user(conn, username: str, password: str) -> dict:
     try:
         exists = conn.execute("SELECT id FROM app_users WHERE username=?", (username,)).fetchone()
     except Exception as e:
-        raise ValueError("جدول کاربران آماده نیست: " + str(e)[:120])
+        raise ValueError("جدول کاربران آماده نیست. دوباره تلاش کنید.")
     if exists:
         raise ValueError("این نام کاربری قبلاً ثبت شده است.")
     uid = "U-" + secrets.token_hex(4).upper()
@@ -211,14 +216,22 @@ def register_user(conn, username: str, password: str) -> dict:
             (uid, username, _hash_password(password), username, "member", 0, int(time.time())),
         )
     except Exception as e:
-        raise ValueError("ثبت نشد: " + str(e)[:200])
+        raise ValueError("ثبت نشد: " + str(e)[:180])
     return {"ok": True, "id": uid, "username": username}
 
 
 def login_user(conn, username: str, password: str) -> dict:
-    username = (username or "").strip()
+    try:
+        ensure_economy_tables(conn)
+    except Exception:
+        pass
+    username = normalize_username(username)
+    if not username:
+        raise ValueError("نام کاربری لازم است.")
     row = conn.execute("SELECT * FROM app_users WHERE username=?", (username,)).fetchone()
-    if not row or not _verify_password(password or "", row["password_hash"]):
+    if not row:
+        raise ValueError("نام کاربری یا رمز اشتباه است.")
+    if not _verify_password(password or "", row["password_hash"]):
         raise ValueError("نام کاربری یا رمز اشتباه است.")
     return dict(row)
 

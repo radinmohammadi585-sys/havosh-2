@@ -3391,41 +3391,42 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError as exc:
                 return self.send_json(400, {"ok": False, "error": str(exc)})
             try:
-                with lock:
-                    conn = db()
-                    try:
-                        row = login_user(conn, str(body.get("username") or ""), str(body.get("password") or ""))
-                    finally:
-                        conn.close()
+                def _lu(c):
+                    return login_user(c, str(body.get("username") or ""), str(body.get("password") or ""))
+                row = economy_conn_work(_lu)
                 token = secrets.token_urlsafe(32)
-                role = "user:" + row["username"]
-                need_name = bool(str(row.get("role") or "") == "teacher" or str(body.get("asTeacher") or "") == "1") and not (row.get("teacher_name") or "").strip()
+                role = "user:" + str(row["username"])
+                now = time.time()
+                persist_session(token, role, now)
                 with lock:
-                    sessions[token] = {"role": role, "created": time.time(), "last_seen": time.time(), "username": row["username"], "display_name": row.get("display_name") or row["username"], "teacher_name": row.get("teacher_name") or "", "user_id": row["id"]}
-                    # persist session like other logins if table exists
-                    try:
-                        conn = db()
-                        try:
-                            conn.execute(
-                                "INSERT OR REPLACE INTO sessions (token, role, created, last_seen) VALUES (?,?,?,?)",
-                                (token, role, time.time(), time.time()),
-                            )
-                            conn.commit()
-                        finally:
-                            conn.close()
-                    except Exception:
-                        pass
-                return self.send_json(200, {
+                    if token in sessions:
+                        sessions[token]["username"] = row["username"]
+                        sessions[token]["display_name"] = row.get("display_name") or row["username"]
+                        sessions[token]["teacher_name"] = row.get("teacher_name") or ""
+                        sessions[token]["user_id"] = row.get("id")
+                csrf = issue_csrf() if "issue_csrf" in globals() else ""
+                payload = {
                     "ok": True,
                     "token": token,
                     "role": role,
                     "username": row["username"],
                     "display_name": row.get("display_name") or row["username"],
                     "teacher_name": row.get("teacher_name") or "",
-                    "needTeacherName": need_name,
-                }, set_cookies=[(COOKIE_NAME, token, SESSION_TTL)])
+                    "label": row.get("display_name") or row["username"],
+                    "needTeacherName": False,
+                    "expiresIn": SESSION_TTL,
+                }
+                if csrf:
+                    payload["csrf"] = csrf
+                    return self.send_json(200, payload, set_cookies=[
+                        (COOKIE_NAME, token, SESSION_TTL),
+                        (CSRF_COOKIE, csrf, SESSION_TTL),
+                    ])
+                return self.send_json(200, payload, set_cookies=[(COOKIE_NAME, token, SESSION_TTL)])
             except ValueError as exc:
                 return self.send_json(401, {"ok": False, "error": str(exc)})
+            except Exception as e:
+                return self.send_json(500, {"ok": False, "error": str(e)[:300]})
 
         if path == "/api/teacher/name":
             s = self.session()
