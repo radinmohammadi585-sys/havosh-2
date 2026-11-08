@@ -58,6 +58,13 @@ def ensure_economy_tables(conn) -> None:
             active INTEGER DEFAULT 1,
             created_at INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS share_holdings (
+            id TEXT PRIMARY KEY,
+            owner_key TEXT NOT NULL,
+            symbol_id TEXT NOT NULL,
+            percent REAL NOT NULL DEFAULT 0,
+            updated_at INTEGER NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS stock_symbols (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
@@ -695,4 +702,91 @@ def rtc_pull(conn, class_id: str, for_key: str, after: int = 0) -> list:
             pass
         out.append(d)
     return out
+
+def holdings_for(conn, owner_key: str) -> list:
+    owner_key = (owner_key or "")[:80]
+    try:
+        ensure_economy_tables(conn)
+        rows = conn.execute(
+            """SELECT h.symbol_id, h.percent, h.updated_at, s.name, s.price, s.change_pct
+               FROM share_holdings h
+               LEFT JOIN stock_symbols s ON s.id = h.symbol_id
+               WHERE h.owner_key=? ORDER BY h.percent DESC""",
+            (owner_key,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
+
+
+def set_or_add_holding(conn, owner_key: str, symbol_id: str, percent: float) -> dict:
+    owner_key = (owner_key or "")[:80]
+    symbol_id = (symbol_id or "").strip().upper()[:20]
+    percent = float(percent)
+    if percent < 0 or percent > 1000:
+        raise ValueError("درصد سهمیه باید بین ۰ و ۱۰۰۰ باشد.")
+    if not symbol_id:
+        raise ValueError("نماد سهم لازم است.")
+    sym = conn.execute("SELECT id FROM stock_symbols WHERE id=?", (symbol_id,)).fetchone()
+    if not sym:
+        raise ValueError("این نماد در بورس نیست.")
+    now = int(time.time())
+    row = conn.execute(
+        "SELECT id, percent FROM share_holdings WHERE owner_key=? AND symbol_id=?",
+        (owner_key, symbol_id),
+    ).fetchone()
+    if row:
+        conn.execute(
+            "UPDATE share_holdings SET percent=?, updated_at=? WHERE id=?",
+            (percent, now, row["id"]),
+        )
+        hid = row["id"]
+    else:
+        hid = "H-" + secrets.token_hex(4).upper()
+        conn.execute(
+            "INSERT INTO share_holdings (id, owner_key, symbol_id, percent, updated_at) VALUES (?,?,?,?,?)",
+            (hid, owner_key, symbol_id, percent, now),
+        )
+    return {"ok": True, "id": hid, "symbol_id": symbol_id, "percent": percent}
+
+
+def transfer_shares(conn, from_key: str, to_key: str, symbol_id: str, percent: float) -> dict:
+    from_key = (from_key or "")[:80]
+    to_key = (to_key or "").strip()[:80]
+    symbol_id = (symbol_id or "").strip().upper()[:20]
+    percent = float(percent)
+    if not to_key:
+        raise ValueError("حساب مقصد لازم است.")
+    if percent <= 0 or percent > 1000:
+        raise ValueError("مقدار انتقال باید بیشتر از ۰ و حداکثر ۱۰۰۰ باشد.")
+    if from_key == to_key:
+        raise ValueError("نمی‌توان به همان حساب منتقل کرد.")
+    row = conn.execute(
+        "SELECT id, percent FROM share_holdings WHERE owner_key=? AND symbol_id=?",
+        (from_key, symbol_id),
+    ).fetchone()
+    have = float(row["percent"]) if row else 0.0
+    if have < percent:
+        raise ValueError(f"سهمیه کافی نیست. موجودی شما: {have}%")
+    now = int(time.time())
+    new_from = have - percent
+    if new_from <= 0 and row:
+        conn.execute("DELETE FROM share_holdings WHERE id=?", (row["id"],))
+    elif row:
+        conn.execute("UPDATE share_holdings SET percent=?, updated_at=? WHERE id=?", (new_from, now, row["id"]))
+    dest = conn.execute(
+        "SELECT id, percent FROM share_holdings WHERE owner_key=? AND symbol_id=?",
+        (to_key, symbol_id),
+    ).fetchone()
+    if dest:
+        conn.execute(
+            "UPDATE share_holdings SET percent=?, updated_at=? WHERE id=?",
+            (min(1000.0, float(dest["percent"]) + percent), now, dest["id"]),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO share_holdings (id, owner_key, symbol_id, percent, updated_at) VALUES (?,?,?,?,?)",
+            ("H-" + secrets.token_hex(4).upper(), to_key, symbol_id, min(1000.0, percent), now),
+        )
+    return {"ok": True, "from": from_key, "to": to_key, "symbol_id": symbol_id, "percent": percent, "remaining": max(0.0, new_from)}
 

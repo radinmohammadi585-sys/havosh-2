@@ -12,7 +12,7 @@ from economy import (
     list_market, add_market_listing, list_shop, list_stocks, tick_stocks,
     list_banks, add_bank, list_classes, create_class, add_grade, list_grades,
     add_teacher_message, list_teacher_messages, set_teacher_name,
-    buy_class_package, get_package, find_class_by_code, list_books, ensure_package, delete_class,
+    buy_class_package, get_package, find_class_by_code, list_books, ensure_package, delete_class, holdings_for, set_or_add_holding, transfer_shares,
     room_join, room_heartbeat, room_members_list, board_add_stroke, board_list, board_clear,
     rtc_post, rtc_pull,
 )
@@ -2553,6 +2553,52 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body))); self.send_header("Cache-Control", "no-store")
             self.end_headers(); self.wfile.write(body); return
         
+
+        if path == "/api/bourse/grant":
+            s = self.session()
+            if not s:
+                return self.send_json(401, {"ok": False, "error": "ورود لازم است."})
+            role = str(s.get("role") or "")
+            # owner/manager can grant; users can grant only to self small? allow owner/manager/teacher grant; user sets own if staff
+            try:
+                body = self.read_json(10_000)
+                target = str(body.get("account") or body.get("to") or role)
+                symbol = str(body.get("symbol") or body.get("symbolId") or "")
+                percent = float(body.get("percent") or 0)
+                is_staff = role == "owner" or role.startswith("manager") or role.startswith("deputy")
+                if not is_staff and target != role and target != str(s.get("username") or ""):
+                    return self.send_json(403, {"ok": False, "error": "فقط به حساب خودتان یا با نقش مدیر."})
+                key = target if is_staff else role
+                def _g(c):
+                    r = set_or_add_holding(c, key if not is_staff else target, symbol, percent)
+                    c.commit()
+                    return r
+                return self.send_json(200, economy_conn_work(_g))
+            except ValueError as e:
+                return self.send_json(400, {"ok": False, "error": str(e)})
+            except Exception as e:
+                return self.send_json(500, {"ok": False, "error": str(e)[:300]})
+
+        if path == "/api/bourse/transfer":
+            s = self.session()
+            if not s:
+                return self.send_json(401, {"ok": False, "error": "ورود لازم است."})
+            role = str(s.get("role") or s.get("username") or "")
+            try:
+                body = self.read_json(10_000)
+                to_key = str(body.get("to") or body.get("account") or "")
+                symbol = str(body.get("symbol") or body.get("symbolId") or "")
+                percent = float(body.get("percent") or 0)
+                def _t(c):
+                    r = transfer_shares(c, role, to_key, symbol, percent)
+                    c.commit()
+                    return r
+                return self.send_json(200, economy_conn_work(_t))
+            except ValueError as e:
+                return self.send_json(400, {"ok": False, "error": str(e)})
+            except Exception as e:
+                return self.send_json(500, {"ok": False, "error": str(e)[:300]})
+
         if path == "/api/market":
             try:
                 def _fn(c):
@@ -2567,6 +2613,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, {"ok": True, "items": items})
             except Exception as exc:
                 return self.send_json(200, {"ok": True, "items": [], "error": str(exc)[:200]})
+
+        if path == "/api/bourse/holdings":
+            s = self.session()
+            key = str((s or {}).get("role") or (s or {}).get("username") or "")
+            if not key:
+                return self.send_json(401, {"ok": False, "error": "برای دیدن سهمیه وارد شوید."})
+            try:
+                items = economy_conn_work(lambda c: holdings_for(c, key))
+                return self.send_json(200, {"ok": True, "holdings": items, "account": key})
+            except Exception as e:
+                return self.send_json(200, {"ok": True, "holdings": [], "error": str(e)[:200]})
+
         if path == "/api/bourse":
             try:
                 def _b(c):
