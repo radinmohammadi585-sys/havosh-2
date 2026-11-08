@@ -194,7 +194,7 @@ background:linear-gradient(135deg,#6b8cff,#9b7dff);border:none;color:#fff;font-s
 .speaker-chip{padding:4px 10px;border-radius:999px;font-size:12px;background:rgba(255,255,255,.06);border:1px solid var(--line)}
 .speaker-chip.hot{border-color:#34d399;background:rgba(52,211,153,.15);box-shadow:0 0 12px rgba(52,211,153,.35)}
 .board-wrap{position:relative;background:#0b1224;border-radius:14px;border:1px solid rgba(94,234,212,.3);overflow:hidden;min-height:320px}
-.board-wrap canvas{width:100%;height:auto;display:block;touch-action:none;cursor:crosshair;background:
+.board-wrap canvas{width:100%;height:auto;display:block;touch-action:none;cursor:crosshair;pointer-events:auto;position:relative;z-index:5;background:
   linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px),
   linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px);background-size:24px 24px}
 .tool-bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 0}
@@ -207,6 +207,15 @@ background:linear-gradient(135deg,#6b8cff,#9b7dff);border:none;color:#fff;font-s
 .member-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px}
 .member-row .pen{margin-right:auto;cursor:pointer;opacity:.7}
 .member-row .pen:hover{opacity:1}
+
+
+html[data-theme="glass"]{--bg:#0a1020;--panel:rgba(255,255,255,.08);--line:rgba(255,255,255,.18);--text:#f8fafc;--muted:#cbd5e1}
+html[data-theme="glass"] body{background:radial-gradient(1200px 600px at 10% -10%,#1e3a8a55,transparent),radial-gradient(900px 500px at 90% 10%,#7c3aed44,transparent),#070b16}
+html[data-theme="glass"] .sidebar,html[data-theme="glass"] .page,html[data-theme="glass"] .card,html[data-theme="glass"] .topbar,html[data-theme="glass"] .pack-card{
+  background:rgba(15,23,42,.45)!important;backdrop-filter:blur(18px) saturate(1.4);-webkit-backdrop-filter:blur(18px) saturate(1.4);border:1px solid rgba(255,255,255,.14)!important}
+.modal-back{position:fixed;inset:0;background:rgba(2,6,20,.55);backdrop-filter:blur(8px);z-index:80;display:none;align-items:center;justify-content:center;padding:16px}
+.modal-back.open{display:flex}
+.modal-card{width:min(420px,100%);border-radius:20px;padding:20px;background:rgba(15,23,42,.82);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.16);box-shadow:0 20px 60px rgba(0,0,0,.45)}
 
 </style>
 </head>
@@ -266,6 +275,7 @@ background:linear-gradient(135deg,#6b8cff,#9b7dff);border:none;color:#fff;font-s
         </select>
         <select id="langSelect" title="Language"></select>
         <select id="themeSelect" title="تم">
+          <option value="glass">شیشه‌ای کدر</option>
           <option value="dark">فضایی (پیش‌فرض)</option>
           <option value="light">روشن</option>
           <option value="aurora">شفق</option>
@@ -490,11 +500,41 @@ int main() {
     </section>
 
     
-    <section class="page" id="page-bourse">
+        <section class="page" id="page-bourse">
       <h2 style="margin-top:0">بورس کاوش</h2>
-      <p class="alert warn">شبیه‌سازی آموزشی — قیمت‌ها واقعی نیستند و معامله مالی واقعی انجام نمی‌شود.</p>
-      <div id="bourseList" class="grid"></div>
+      <p class="alert">شبیه‌سازی آموزشی — قیمت‌ها واقعی نیستند. سهمیه هر حساب از ۰٪ تا ۱۰۰۰٪.</p>
+      <div class="grid">
+        <div class="card">
+          <h3 style="margin-top:0">نمادها</h3>
+          <div id="bourseList" class="empty">در حال بارگذاری…</div>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0">سهمیه حساب من</h3>
+          <p id="bourseAccount" style="font-size:13px;color:var(--muted)">—</p>
+          <div id="myHoldings" class="empty">وارد شوید تا سهمیه را ببینید.</div>
+          <hr style="border-color:var(--line);margin:14px 0">
+          <h3>انتقال سهمیه</h3>
+          <div class="form-grid">
+            <label>نماد <input type="text" id="tfSymbol" placeholder="مثلاً EDU"></label>
+            <label>درصد (۰ تا ۱۰۰۰) <input type="number" id="tfPercent" min="0" max="1000" step="0.1" value="10"></label>
+            <label>حساب مقصد (نقش یا نام کاربری) <input type="text" id="tfTo" placeholder="student12 یا user_ali"></label>
+            <button type="button" class="btn btn-primary" id="tfBtn">انتقال</button>
+            <div id="tfMsg"></div>
+          </div>
+          <hr style="border-color:var(--line);margin:14px 0">
+          <h3>ثبت/تنظیم سهمیه</h3>
+          <p style="font-size:12px;color:var(--muted)">مدیر می‌تواند برای هر حساب تنظیم کند؛ کاربر برای حساب خودش.</p>
+          <div class="form-grid">
+            <label>حساب <input type="text" id="grAccount" placeholder="خالی = خودم"></label>
+            <label>نماد <input type="text" id="grSymbol" placeholder="EDU"></label>
+            <label>درصد <input type="number" id="grPercent" min="0" max="1000" step="0.1" value="100"></label>
+            <button type="button" class="btn" id="grHoldBtn">ثبت سهمیه</button>
+            <div id="grHoldMsg"></div>
+          </div>
+        </div>
+      </div>
     </section>
+
 
     <section class="page" id="page-market">
       <h2 style="margin-top:0">بازار آزاد کاوش</h2>
@@ -705,68 +745,18 @@ int main() {
 
 
     <!-- PROFILE -->
-        <section class="page" id="page-profile">
+            <section class="page" id="page-profile">
       <h2 style="margin-top:0">پروفایل و تنظیمات</h2>
-      <div class="card" style="margin-bottom:16px">
-        <h3>ساخت حساب کاربری</h3>
-        <div class="form-grid">
-          <label>نام کاربری <input type="text" id="regUsername" autocomplete="username"></label>
-          <label>رمز عبور <input type="password" id="regPassword" autocomplete="new-password"></label>
-          <label>تکرار رمز عبور <input type="password" id="regPassword2" autocomplete="new-password"></label>
-          <button class="btn btn-primary" type="button" id="regBtn">ثبت‌نام</button>
-          <div id="regMsg"></div>
-        </div>
-        <hr style="border-color:var(--line);margin:14px 0">
-        <h3>ورود با حساب</h3>
-        <div class="form-grid">
-          <label>نام کاربری <input type="text" id="userLoginName"></label>
-          <label>رمز <input type="password" id="userLoginPass"></label>
-          <button class="btn" type="button" id="userLoginBtn">ورود حساب</button>
-          <div id="userLoginMsg"></div>
-        </div>
-      </div>
       <div class="card">
-        <h3>ورود نقش‌های مدرسه (مالک / مدیر / معلم / دانش‌آموز)</h3>
-        <div class="form-grid">
-          <p style="font-size:13px;color:var(--muted)">رمزها از Environment سرور خوانده می‌شوند.</p>
-          <div id="managerEnvHintProfile" class="alert warn">وضعیت ورود نقش‌ها…</div>
-          <label>نقش
-            <select id="loginRole">
-              <option value="owner">مالک</option>
-              <option value="manager1">مدیر ۱</option>
-              <option value="manager2">مدیر ۲</option>
-              <option value="manager3">مدیر ۳</option>
-              <option value="manager4">مدیر ۴</option>
-              <option value="deputy1">معاون ۱</option>
-              <option value="deputy2">معاون ۲</option>
-              <option value="deputy3">معاون ۳</option>
-              <option value="deputy4">معاون ۴</option>
-              <option value="deputy5">معاون ۵</option>
-              <option value="deputy6">معاون ۶</option>
-              <option value="deputy7">معاون ۷</option>
-              <option value="deputy8">معاون ۸</option>
-              <option value="teacher1">معلم ۱</option>
-              <option value="teacher2">معلم ۲</option>
-              <option value="teacher3">معلم ۳</option>
-              <option value="teacher4">معلم ۴</option>
-              <option value="teacher5">معلم ۵</option>
-              <option value="teacher6">معلم ۶</option>
-              <option value="teacher7">معلم ۷</option>
-              <option value="teacher8">معلم ۸</option>
-              <option value="teacher9">معلم ۹</option>
-              <option value="teacher10">معلم ۱۰</option>
-              <option value="student">دانش‌آموز (۱ تا ۳۰۰۰)</option>
-            </select>
-          </label>
-          <label id="studentNumWrap" style="display:none">شماره دانش‌آموز
-            <input type="number" id="studentNum" min="1" max="3000" value="1">
-          </label>
-          <label>رمز عبور <input type="password" id="loginPass"></label>
-          <button class="btn btn-primary" id="loginBtn" type="button">ورود</button>
-          <div id="loginMsg"></div>
+        <p id="profileSummary" style="font-size:14px">برای دیدن حساب، وارد شوید.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+          <button type="button" class="btn btn-primary" id="openAuthModal">ورود / ساخت حساب</button>
+          <button type="button" class="btn btn-ghost" id="logoutBtnProfile">خروج</button>
         </div>
+        <div id="managerEnvHintProfile" class="alert warn" style="margin-top:12px">وضعیت ورود نقش‌ها…</div>
       </div>
     </section>
+
 
 
     <!-- ADMIN -->
@@ -1134,6 +1124,12 @@ async function refreshMe(){
 }
 
 function updateAuthUI(){
+  const ps = $('profileSummary');
+  if (ps) {
+    if (user) ps.textContent = 'وارد شده: ' + (user.label || user.display_name || user.username || user.role || '');
+    else ps.textContent = 'برای دیدن حساب، وارد شوید.';
+  }
+
   const badge = $('userBadge');
   const logout = $('logoutBtn');
   const adminNav = $('adminNav');
@@ -1951,7 +1947,7 @@ if ($('adminLoginBtn')) $('adminLoginBtn').addEventListener('click', async () =>
 });
 
 
-const THEMES = ['dark','light','aurora','sunset','royal','forest','ocean','rose','sand','mint','crimson','slate'];
+const THEMES = ['glass','dark','light','aurora','sunset','royal','forest','ocean','rose','sand','mint','crimson','slate'];
 function applyTheme(name){
   if (!THEMES.includes(name)) name = 'dark';
   document.documentElement.setAttribute('data-theme', name === 'dark' ? 'dark' : name);
@@ -2298,14 +2294,31 @@ function applyHideImageStudio(on){
 
 
 async function loadBourse(){
-  const box = $('bourseList'); if (!box) return;
-  const {data} = await api('/api/bourse');
-  if (!data.ok) { box.innerHTML = '<div class="empty">خطا</div>'; return; }
-  box.innerHTML = (data.symbols||[]).map(s =>
-    `<div class="card"><h3>${escapeHtml(s.id)} — ${escapeHtml(s.name)}</h3>
-     <p style="font-size:22px;font-weight:800">${escapeHtml(String(s.price))}</p>
-     <p class="badge">${Number(s.change_pct)>=0?'+':''}${escapeHtml(String(s.change_pct))}٪</p></div>`
-  ).join('') + (data.note?`<p class="alert warn">${escapeHtml(data.note)}</p>`:'');
+  const box = $('bourseList');
+  try {
+    const {data} = await api('/api/bourse');
+    const syms = data.symbols || [];
+    if (box) {
+      box.innerHTML = syms.length ? syms.map(s =>
+        '<div class="card" style="padding:10px;margin-bottom:8px"><strong>' + escapeHtml(s.id) + '</strong> — '
+        + escapeHtml(s.name||'') + '<br><span class="badge ' + ((s.change_pct||0)>=0?'good':'bad') + '">'
+        + (s.price||0) + ' (' + (s.change_pct||0) + '%)</span></div>'
+      ).join('') : '<div class="empty">نمادی نیست</div>';
+    }
+  } catch(e) { if (box) box.innerHTML = '<div class="alert err">خطا</div>'; }
+  try {
+    const {data} = await api('/api/bourse/holdings');
+    if ($('bourseAccount')) $('bourseAccount').textContent = data.ok ? ('حساب: ' + (data.account||'')) : 'وارد شوید';
+    const h = $('myHoldings');
+    if (h) {
+      const list = data.holdings || [];
+      h.innerHTML = list.length ? list.map(x =>
+        '<div style="padding:8px 0;border-bottom:1px solid var(--line)">' + escapeHtml(x.symbol_id)
+        + ' — <strong>' + escapeHtml(String(x.percent)) + '٪</strong> '
+        + (x.name ? ('(' + escapeHtml(x.name) + ')') : '') + '</div>'
+      ).join('') : '<div class="empty">سهمیه‌ای ثبت نشده</div>';
+    }
+  } catch(e) {}
 }
 async function loadMarket(){
   const box = $('mktList'); if (!box) return;
@@ -2632,23 +2645,37 @@ function ensureOutboundStream() {
 
 function addTrackToOutbound(track) {
   const s = ensureOutboundStream();
-  // replace same-kind track
-  s.getTracks().filter(t => t.kind === track.kind).forEach(t => { s.removeTrack(t); t.stop && 0; });
+  s.getTracks().filter(t => t.kind === track.kind).forEach(t => {
+    try { s.removeTrack(t); } catch(e) {}
+  });
   s.addTrack(track);
-  // renegotiate existing peers
-  Object.keys(window.__rtc.peers).forEach(k => rtcNegotiate(k));
+  Object.keys(window.__rtc.peers || {}).forEach(async (peerId) => {
+    try {
+      const pc = window.__rtc.peers[peerId];
+      const sender = pc.getSenders().find(x => x.track && x.track.kind === track.kind);
+      if (sender) await sender.replaceTrack(track);
+      else pc.addTrack(track, s);
+      await rtcNegotiate(peerId);
+    } catch (e) { console.error('track share', e); try { rtcNegotiate(peerId); } catch(e2) {} }
+  });
 }
 
 function remoteBox(peerId) {
   let el = document.getElementById('rv-' + peerId);
-  if (el) return el.querySelector('video');
+  if (el) {
+    const v = el.querySelector('video');
+    if (v) { v.autoplay = true; v.playsInline = true; try { v.play(); } catch(e) {} }
+    return v;
+  }
   const wrap = document.createElement('div');
   wrap.className = 'room-video-box';
   wrap.id = 'rv-' + peerId;
-  wrap.innerHTML = '<video autoplay playsinline></video><span class="room-video-label">' + escapeHtml(peerId) + '</span>';
+  wrap.innerHTML = '<video autoplay playsinline controls></video><span class="room-video-label">' + escapeHtml(peerId) + '</span>';
   const host = $('remoteVideos');
   if (host) host.appendChild(wrap);
-  return wrap.querySelector('video');
+  const v = wrap.querySelector('video');
+  if (v) { v.muted = false; v.volume = 1; try { v.play(); } catch(e) {} }
+  return v;
 }
 
 async function rtcGetPC(peerId) {
@@ -2759,10 +2786,12 @@ function boardCtx() {
 
 function boardPoint(ev) {
   const c = $('classBoard');
+  if (!c) return [0,0];
   const r = c.getBoundingClientRect();
-  const x = ((ev.clientX - r.left) / r.width) * c.width;
-  const y = ((ev.clientY - r.top) / r.height) * c.height;
-  return [x, y];
+  const w = r.width || 1, h = r.height || 1;
+  const x = ((ev.clientX - r.left) / w) * c.width;
+  const y = ((ev.clientY - r.top) / h) * c.height;
+  return [Math.max(0, Math.min(c.width, x)), Math.max(0, Math.min(c.height, y))];
 }
 
 async function openLocalRoom(c) {
@@ -2826,44 +2855,57 @@ async function syncBoard() {
 
 function setupBoardDraw() {
   const c = $('classBoard');
-  if (!c || c.dataset.bound) return;
+  if (!c) return;
+  // always enable pen when entering room
+  window.__room.pen = true;
+  if (c.dataset.bound === '1') return;
   c.dataset.bound = '1';
   let pts = [];
+  const getEv = (ev) => (ev.touches && ev.touches[0]) ? ev.touches[0] : ev;
   const onDown = (ev) => {
-    if (!window.__room.pen) return;
+    if (!window.__room.pen) window.__room.pen = true;
     window.__room.drawing = true;
-    pts = [boardPoint(ev.touches ? ev.touches[0] : ev)];
-    ev.preventDefault();
+    pts = [boardPoint(getEv(ev))];
+    try { ev.preventDefault(); } catch(e) {}
   };
   const onMove = (ev) => {
     if (!window.__room.drawing) return;
-    const p = boardPoint(ev.touches ? ev.touches[0] : ev);
+    const p = boardPoint(getEv(ev));
     pts.push(p);
     const ctx = boardCtx();
     if (ctx && pts.length >= 2) {
-      ctx.strokeStyle = window.__room.color;
-      ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.strokeStyle = window.__room.color || '#e11d48';
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
       ctx.beginPath();
       ctx.moveTo(pts[pts.length-2][0], pts[pts.length-2][1]);
       ctx.lineTo(p[0], p[1]);
       ctx.stroke();
     }
-    ev.preventDefault();
+    try { ev.preventDefault(); } catch(e) {}
   };
   const onUp = async () => {
     if (!window.__room.drawing) return;
     window.__room.drawing = false;
-    if (pts.length >= 2) {
-      await api('/api/room/board', { method:'POST', body: JSON.stringify({ classId: window.__room.classId, color: window.__room.color, points: pts }) });
+    if (pts.length >= 2 && window.__room.classId) {
+      try {
+        await api('/api/room/board', { method:'POST', body: JSON.stringify({ classId: window.__room.classId, color: window.__room.color || '#e11d48', points: pts }) });
+      } catch(e) { console.error('board save', e); }
     }
     pts = [];
   };
   c.addEventListener('mousedown', onDown);
   c.addEventListener('mousemove', onMove);
+  c.addEventListener('mouseup', onUp);
+  c.addEventListener('mouseleave', onUp);
   window.addEventListener('mouseup', onUp);
   c.addEventListener('touchstart', onDown, {passive:false});
   c.addEventListener('touchmove', onMove, {passive:false});
   c.addEventListener('touchend', onUp);
+  c.style.cursor = 'crosshair';
+  c.style.pointerEvents = 'auto';
+  c.style.touchAction = 'none';
 }
 
 function startRoomPoll() {
@@ -2903,7 +2945,7 @@ function renderRoomMembers(members) {
 async function enableMic() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, sampleRate: 48000, channelCount: 1 },
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       video: false
     });
     window.__room.micStream = stream;
@@ -2974,7 +3016,7 @@ function stopLocalRoom() {
     if (t === 'btnMic') enableMic();
     if (t === 'btnCam') enableCam();
     if (t === 'btnScreen') enableScreen();
-    if (t === 'btnPen') { window.__room.pen = !window.__room.pen; }
+    if (t === 'btnPen') { window.__room.pen = true; const c=$('classBoard'); if(c){c.style.cursor='crosshair';c.style.pointerEvents='auto';} alert('مداد فعال است — روی تخته بکشید'); }
     if (t === 'btnBoardClear') {
       api('/api/room/board', { method:'POST', body: JSON.stringify({ classId: window.__room.classId, action: 'clear' }) }).then(() => {
         const ctx = boardCtx(); if (ctx) ctx.clearRect(0,0,1920,1080);
@@ -3005,6 +3047,34 @@ async function loadRoomChat() {
 // override open sky
 window.__openSkyRoom = function(c) { openLocalRoom(c); loadRoomChat(); };
 
+
+if ($('tfBtn')) $('tfBtn').addEventListener('click', async () => {
+  const {data} = await api('/api/bourse/transfer', {method:'POST', body: JSON.stringify({
+    symbol: $('tfSymbol') && $('tfSymbol').value,
+    percent: $('tfPercent') && $('tfPercent').value,
+    to: $('tfTo') && $('tfTo').value
+  })});
+  $('tfMsg').innerHTML = data.ok
+    ? ('<div class="alert ok">منتقل شد — باقی‌مانده: ' + (data.remaining||0) + '٪</div>')
+    : ('<div class="alert err">' + escapeHtml(data.error||'خطا') + '</div>');
+  if (data.ok) loadBourse();
+});
+if ($('grHoldBtn')) $('grHoldBtn').addEventListener('click', async () => {
+  const {data} = await api('/api/bourse/grant', {method:'POST', body: JSON.stringify({
+    symbol: $('grSymbol') && $('grSymbol').value,
+    percent: $('grPercent') && $('grPercent').value,
+    account: $('grAccount') && $('grAccount').value
+  })});
+  $('grHoldMsg').innerHTML = data.ok ? '<div class="alert ok">ثبت شد</div>' : ('<div class="alert err">' + escapeHtml(data.error||'') + '</div>');
+  if (data.ok) loadBourse();
+});
+function openAuthModal(){ const m=$('authModal'); if(m) m.classList.add('open'); }
+function closeAuthModal(){ const m=$('authModal'); if(m) m.classList.remove('open'); }
+if ($('openAuthModal')) $('openAuthModal').addEventListener('click', openAuthModal);
+if ($('authModalClose')) $('authModalClose').addEventListener('click', closeAuthModal);
+if ($('authModal')) $('authModal').addEventListener('click', (e) => { if (e.target === $('authModal')) closeAuthModal(); });
+if ($('logoutBtnProfile')) $('logoutBtnProfile').addEventListener('click', () => { if ($('logoutBtn')) $('logoutBtn').click(); });
+
 /* init */
 try { applyI18n(); } catch(e) { console.error(e); }
 try { renderFeatures(); } catch(e) { console.error(e); }
@@ -3016,6 +3086,47 @@ try { showPage('home'); } catch(e) { console.error(e); }
 try { setInterval(function(){ try { refreshHealth(); } catch(e){} }, 60000); } catch(e) {}
 })();</script>
 
+<div class="modal-back" id="authModal">
+  <div class="modal-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 style="margin:0">ورود / ساخت حساب</h3>
+      <button type="button" class="btn btn-ghost" id="authModalClose">بستن</button>
+    </div>
+    <div class="form-grid">
+      <h4 style="margin:0">ساخت حساب</h4>
+      <label>نام کاربری <input type="text" id="regUsername" autocomplete="username"></label>
+      <label>رمز عبور <input type="password" id="regPassword" autocomplete="new-password"></label>
+      <label>تکرار رمز <input type="password" id="regPassword2" autocomplete="new-password"></label>
+      <button type="button" class="btn btn-primary" id="regBtn">ثبت‌نام</button>
+      <div id="regMsg"></div>
+      <hr style="border-color:var(--line);margin:8px 0">
+      <h4 style="margin:0">ورود حساب</h4>
+      <label>نام کاربری <input type="text" id="userLoginName"></label>
+      <label>رمز <input type="password" id="userLoginPass"></label>
+      <button type="button" class="btn" id="userLoginBtn">ورود حساب</button>
+      <div id="userLoginMsg"></div>
+      <hr style="border-color:var(--line);margin:8px 0">
+      <h4 style="margin:0">ورود نقش مدرسه</h4>
+      <label>نقش
+        <select id="loginRole">
+          <option value="owner">مالک</option>
+          <option value="manager1">مدیر ۱</option>
+          <option value="manager2">مدیر ۲</option>
+          <option value="manager3">مدیر ۳</option>
+          <option value="manager4">مدیر ۴</option>
+          <option value="teacher1">معلم ۱</option>
+          <option value="student">دانش‌آموز</option>
+        </select>
+      </label>
+      <label id="studentNumWrap" style="display:none">شماره دانش‌آموز
+        <input type="number" id="studentNum" min="1" max="3000" value="1">
+      </label>
+      <label>رمز <input type="password" id="loginPass"></label>
+      <button type="button" class="btn btn-primary" id="loginBtn">ورود نقش</button>
+      <div id="loginMsg"></div>
+    </div>
+  </div>
+</div>
 <div id="kavosh-copyright-footer" style="position:fixed;bottom:8px;left:50%;transform:translateX(-50%);z-index:30;font-size:10px;color:var(--muted);opacity:.85;pointer-events:none;text-align:center;max-width:90%">
   © کاوش AI 2 — استفادهٔ تجاری یا انتشار مجدد بدون مجوز صاحب اثر ممنوع است.
 </div>
