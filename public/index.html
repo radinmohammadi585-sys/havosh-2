@@ -217,6 +217,26 @@ html[data-theme="glass"] .sidebar,html[data-theme="glass"] .page,html[data-theme
 .modal-back.open{display:flex}
 .modal-card{width:min(420px,100%);border-radius:20px;padding:20px;background:rgba(15,23,42,.82);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.16);box-shadow:0 20px 60px rgba(0,0,0,.45)}
 
+
+.modal-back{position:fixed;inset:0;background:rgba(2,6,20,.6);backdrop-filter:blur(10px);z-index:90;display:none;align-items:center;justify-content:center;padding:12px;overflow:auto}
+.modal-back.open{display:flex}
+.modal-card{width:min(440px,100%);max-height:min(92vh,720px);overflow:auto;border-radius:20px;padding:18px;background:rgba(15,23,42,.92);backdrop-filter:blur(22px);border:1px solid rgba(255,255,255,.16);box-shadow:0 24px 70px rgba(0,0,0,.5);-webkit-overflow-scrolling:touch}
+.auth-tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.auth-tabs button{flex:1;min-width:100px;padding:10px 8px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);cursor:pointer;font-size:13px}
+.auth-tabs button.on{background:linear-gradient(135deg,rgba(59,130,246,.45),rgba(139,92,246,.4));border-color:rgba(147,197,253,.5);font-weight:700}
+.auth-pane{display:none}
+.auth-pane.on{display:block}
+.sq-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.sq-card{aspect-ratio:1/1;display:flex;flex-direction:column;border-radius:16px;border:1px solid var(--line);background:rgba(255,255,255,.05);padding:12px;overflow:hidden;min-height:150px}
+.sq-card .sq-title{font-weight:700;font-size:14px;margin:0 0 6px;line-height:1.3}
+.sq-card .sq-desc{font-size:11px;color:var(--muted);flex:1;overflow:hidden}
+.sq-card .sq-price{margin-top:auto;padding-top:8px;border-top:1px solid rgba(255,255,255,.1);font-weight:800;font-size:13px}
+.chg-up{color:#34d399;font-weight:700}
+.chg-down{color:#f87171;font-weight:700}
+.price-table{width:100%;border-collapse:collapse;font-size:13px}
+.price-table th,.price-table td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:right}
+.price-table th{color:var(--muted);font-weight:600}
+
 </style>
 </head>
 <body>
@@ -2311,11 +2331,23 @@ async function loadBourse(){
     const {data} = await api('/api/bourse');
     const syms = data.symbols || [];
     if (box) {
-      box.innerHTML = syms.length ? syms.map(s =>
-        '<div class="card" style="padding:10px;margin-bottom:8px"><strong>' + escapeHtml(s.id) + '</strong> — '
-        + escapeHtml(s.name||'') + '<br><span class="badge ' + ((s.change_pct||0)>=0?'good':'bad') + '">'
-        + (s.price||0) + ' (' + (s.change_pct||0) + '%)</span></div>'
-      ).join('') : '<div class="empty">نمادی نیست</div>';
+      if (!syms.length) box.innerHTML = '<div class="empty">نمادی نیست</div>';
+      else {
+        let table = '<table class="price-table"><thead><tr><th>نماد</th><th>نام</th><th>قیمت</th><th>تغییر</th></tr></thead><tbody>';
+        table += syms.map(s => {
+          const ch = Number(s.change_pct || 0);
+          const cls = ch >= 0 ? 'chg-up' : 'chg-down';
+          const sign = ch > 0 ? '+' : '';
+          return '<tr><td><strong>' + escapeHtml(s.id) + '</strong></td><td>' + escapeHtml(s.name||'') + '</td><td>' + escapeHtml(String(s.price||0)) + '</td><td class="' + cls + '">' + sign + escapeHtml(String(ch)) + '٪</td></tr>';
+        }).join('');
+        table += '</tbody></table>';
+        const cards = '<div class="sq-grid" style="margin-top:12px">' + syms.map(s => {
+          const ch = Number(s.change_pct || 0);
+          const cls = ch >= 0 ? 'chg-up' : 'chg-down';
+          return '<div class="sq-card"><div class="sq-title">' + escapeHtml(s.id) + '</div><div class="sq-desc">' + escapeHtml(s.name||'') + '<br><span class="' + cls + '">' + (ch>0?'+':'') + ch + '٪</span></div><div class="sq-price">' + escapeHtml(String(s.price||0)) + '</div></div>';
+        }).join('') + '</div>';
+        box.innerHTML = table + cards;
+      }
     }
   } catch(e) { if (box) box.innerHTML = '<div class="alert err">خطا</div>'; }
   try {
@@ -2324,11 +2356,9 @@ async function loadBourse(){
     const h = $('myHoldings');
     if (h) {
       const list = data.holdings || [];
-      h.innerHTML = list.length ? list.map(x =>
-        '<div style="padding:8px 0;border-bottom:1px solid var(--line)">' + escapeHtml(x.symbol_id)
-        + ' — <strong>' + escapeHtml(String(x.percent)) + '٪</strong> '
-        + (x.name ? ('(' + escapeHtml(x.name) + ')') : '') + '</div>'
-      ).join('') : '<div class="empty">سهمیه‌ای ثبت نشده</div>';
+      h.innerHTML = list.length
+        ? ('<div class="sq-grid">' + list.map(x => '<div class="sq-card"><div class="sq-title">' + escapeHtml(x.symbol_id) + '</div><div class="sq-desc">' + escapeHtml(x.name||'') + '</div><div class="sq-price">' + escapeHtml(String(x.percent)) + '٪</div></div>').join('') + '</div>')
+        : '<div class="empty">سهمیه‌ای ثبت نشده</div>';
     }
   } catch(e) {}
 }
@@ -2338,15 +2368,12 @@ async function loadMarket(){
   try {
     const {data} = await api('/api/market');
     const items = data.items || [];
-    box.innerHTML = items.length ? items.map(it => {
-      const share = (it.share_percent && Number(it.share_percent) > 0)
-        ? (' · سهمیه: ' + it.share_percent + '% ' + (it.share_symbol || ''))
-        : '';
-      return '<div class="card" style="padding:12px;margin-bottom:8px"><strong>' + escapeHtml(it.title) + '</strong>'
-        + '<p style="font-size:12px;color:var(--muted)">' + escapeHtml(it.description||'') + '</p>'
-        + '<p>قیمت: ' + escapeHtml(String(it.price)) + ' ' + escapeHtml(it.currency||'') + escapeHtml(share) + '</p>'
-        + '<p style="font-size:12px">فروشنده: ' + escapeHtml(it.seller_name||it.seller_key||'') + '</p></div>';
-    }).join('') : '<div class="empty">آگهی نیست</div>';
+    if (!items.length) { box.innerHTML = '<div class="empty">آگهی نیست</div>'; return; }
+    box.innerHTML = '<div class="sq-grid">' + items.map(it => {
+      const share = (it.share_percent && Number(it.share_percent) > 0) ? (' · ' + it.share_percent + '% ' + (it.share_symbol||'')) : '';
+      const priceLine = escapeHtml(String(it.price)) + ' ' + escapeHtml(it.currency||'') + escapeHtml(share);
+      return '<div class="sq-card"><div class="sq-title">' + escapeHtml(it.title) + '</div><div class="sq-desc">' + escapeHtml(it.description||'') + '<br>فروشنده: ' + escapeHtml(it.seller_name||it.seller_key||'') + '</div><div class="sq-price">' + priceLine + '</div></div>';
+    }).join('') + '</div>';
   } catch(e) { box.innerHTML = '<div class="alert err">خطا</div>'; }
 }
 $('mktPostBtn') && $('mktPostBtn').addEventListener('click', async () => {
@@ -2362,13 +2389,15 @@ $('mktPostBtn') && $('mktPostBtn').addEventListener('click', async () => {
   if (data.ok) loadMarket();
 });
 async function loadShop(){
-  const box = $('shopList'); if (!box) return;
-  const {data} = await api('/api/shop');
-  if (!data.ok) { box.innerHTML = '<div class="empty">خطا</div>'; return; }
-  box.innerHTML = (data.items||[]).map(i =>
-    `<div class="card"><h3>${escapeHtml(i.title)}</h3><p>${escapeHtml(i.description||'')}</p>
-     <p><strong>${escapeHtml(String(i.price))}</strong> کاوش</p></div>`
-  ).join('') || '<div class="empty">خالی</div>';
+  const box = $('shopList');
+  if (!box) return;
+  try {
+    const {data} = await api('/api/shop');
+    const items = data.items || [];
+    box.innerHTML = items.length ? ('<div class="sq-grid">' + items.map(it =>
+      '<div class="sq-card"><div class="sq-title">' + escapeHtml(it.title||'') + '</div><div class="sq-desc">' + escapeHtml(it.description||'') + '</div><div class="sq-price">' + escapeHtml(String(it.price!=null?it.price:'')) + '</div></div>'
+    ).join('') + '</div>') : '<div class="empty">آیتمی نیست</div>';
+  } catch(e) { box.innerHTML = '<div class="alert err">خطا</div>'; }
 }
 async function loadBanks(){
   const box = $('bankList'); if (!box) return;
@@ -3081,7 +3110,20 @@ if ($('grHoldBtn')) $('grHoldBtn').addEventListener('click', async () => {
   $('grHoldMsg').innerHTML = data.ok ? '<div class="alert ok">ثبت شد</div>' : ('<div class="alert err">' + escapeHtml(data.error||'') + '</div>');
   if (data.ok) loadBourse();
 });
-function openAuthModal(){ const m=$('authModal'); if(m) m.classList.add('open'); }
+
+function switchAuthTab(name) {
+  document.querySelectorAll('.auth-tabs button').forEach(b => b.classList.toggle('on', b.getAttribute('data-auth-tab') === name));
+  document.querySelectorAll('.auth-pane').forEach(p => p.classList.remove('on'));
+  const map = {register:'authPaneRegister', login:'authPaneLogin', org:'authPaneOrg'};
+  const el = $(map[name] || 'authPaneRegister');
+  if (el) el.classList.add('on');
+}
+document.addEventListener('click', function(ev) {
+  const btn = ev.target && ev.target.closest && ev.target.closest('[data-auth-tab]');
+  if (btn) { switchAuthTab(btn.getAttribute('data-auth-tab')); }
+});
+
+function openAuthModal(){ const m=$('authModal'); if(m){ m.classList.add('open'); m.scrollTop=0; const c=$('authModalCard'); if(c) c.scrollTop=0; } switchAuthTab('register'); }
 function closeAuthModal(){ const m=$('authModal'); if(m) m.classList.remove('open'); }
 if ($('openAuthModal')) $('openAuthModal').addEventListener('click', openAuthModal);
 if ($('authModalClose')) $('authModalClose').addEventListener('click', closeAuthModal);
@@ -3164,43 +3206,55 @@ try { setInterval(function(){ try { refreshHealth(); } catch(e){} }, 60000); } c
 })();</script>
 
 <div class="modal-back" id="authModal">
-  <div class="modal-card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <h3 style="margin:0">ورود / ساخت حساب</h3>
+  <div class="modal-card" id="authModalCard">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;position:sticky;top:0;background:inherit;z-index:2;padding-bottom:8px">
+      <h3 style="margin:0">حساب کاوش</h3>
       <button type="button" class="btn btn-ghost" id="authModalClose">بستن</button>
     </div>
-    <div class="form-grid">
-      <h4 style="margin:0">ساخت حساب</h4>
-      <label>نام کاربری <input type="text" id="regUsername" autocomplete="username"></label>
-      <label>رمز عبور <input type="password" id="regPassword" autocomplete="new-password"></label>
-      <label>تکرار رمز <input type="password" id="regPassword2" autocomplete="new-password"></label>
-      <button type="button" class="btn btn-primary" id="regBtn">ثبت‌نام</button>
-      <div id="regMsg"></div>
-      <hr style="border-color:var(--line);margin:8px 0">
-      <h4 style="margin:0">ورود حساب</h4>
-      <label>نام کاربری <input type="text" id="userLoginName"></label>
-      <label>رمز <input type="password" id="userLoginPass"></label>
-      <button type="button" class="btn" id="userLoginBtn">ورود حساب</button>
-      <div id="userLoginMsg"></div>
-      <hr style="border-color:var(--line);margin:8px 0">
-      <h4 style="margin:0">ورود نقش مدرسه</h4>
-      <label>نقش
-        <select id="loginRole">
-          <option value="owner">مالک</option>
-          <option value="manager1">مدیر ۱</option>
-          <option value="manager2">مدیر ۲</option>
-          <option value="manager3">مدیر ۳</option>
-          <option value="manager4">مدیر ۴</option>
-          <option value="teacher1">معلم ۱</option>
-          <option value="student">دانش‌آموز</option>
-        </select>
-      </label>
-      <label id="studentNumWrap" style="display:none">شماره دانش‌آموز
-        <input type="number" id="studentNum" min="1" max="3000" value="1">
-      </label>
-      <label>رمز <input type="password" id="loginPass"></label>
-      <button type="button" class="btn btn-primary" id="loginBtn">ورود نقش</button>
-      <div id="loginMsg"></div>
+    <div class="auth-tabs">
+      <button type="button" class="on" data-auth-tab="register">ساخت حساب</button>
+      <button type="button" data-auth-tab="login">ورود حساب</button>
+      <button type="button" data-auth-tab="org">ورود سازمانی</button>
+    </div>
+    <div class="auth-pane on" id="authPaneRegister">
+      <div class="form-grid">
+        <label>نام کاربری <input type="text" id="regUsername" autocomplete="username" placeholder="حداقل ۳ کاراکتر"></label>
+        <label>رمز عبور <input type="password" id="regPassword" autocomplete="new-password" placeholder="حداقل ۴ کاراکتر"></label>
+        <label>تکرار رمز <input type="password" id="regPassword2" autocomplete="new-password"></label>
+        <button type="button" class="btn btn-primary" id="regBtn">ثبت‌نام</button>
+        <div id="regMsg"></div>
+      </div>
+    </div>
+    <div class="auth-pane" id="authPaneLogin">
+      <div class="form-grid">
+        <label>نام کاربری <input type="text" id="userLoginName" autocomplete="username"></label>
+        <label>رمز <input type="password" id="userLoginPass" autocomplete="current-password"></label>
+        <button type="button" class="btn btn-primary" id="userLoginBtn">ورود حساب</button>
+        <div id="userLoginMsg"></div>
+      </div>
+    </div>
+    <div class="auth-pane" id="authPaneOrg">
+      <div class="form-grid">
+        <label>نقش
+          <select id="loginRole">
+            <option value="owner">مالک</option>
+            <option value="manager1">مدیر ۱</option>
+            <option value="manager2">مدیر ۲</option>
+            <option value="manager3">مدیر ۳</option>
+            <option value="manager4">مدیر ۴</option>
+            <option value="deputy1">معاون ۱</option>
+            <option value="teacher1">معلم ۱</option>
+            <option value="teacher2">معلم ۲</option>
+            <option value="student">دانش‌آموز</option>
+          </select>
+        </label>
+        <label id="studentNumWrap" style="display:none">شماره دانش‌آموز
+          <input type="number" id="studentNum" min="1" max="3000" value="1">
+        </label>
+        <label>رمز سازمانی <input type="password" id="loginPass" autocomplete="current-password"></label>
+        <button type="button" class="btn btn-primary" id="loginBtn">ورود سازمانی</button>
+        <div id="loginMsg"></div>
+      </div>
     </div>
   </div>
 </div>
