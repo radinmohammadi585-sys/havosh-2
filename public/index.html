@@ -237,6 +237,82 @@ html[data-theme="glass"] .sidebar,html[data-theme="glass"] .page,html[data-theme
 .price-table th,.price-table td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:right}
 .price-table th{color:var(--muted);font-weight:600}
 
+
+#page-bourse, #page-market, #page-shop {
+  max-width: 1100px;
+}
+#page-bourse .bourse-stack,
+#page-market .market-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.bourse-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .bourse-row { grid-template-columns: 1fr; }
+}
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+}
+.price-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  table-layout: fixed;
+}
+.price-table th, .price-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+  vertical-align: middle;
+  word-break: break-word;
+}
+.price-table th { color: var(--muted); font-weight: 600; background: rgba(255,255,255,.03); }
+.price-table tr:last-child td { border-bottom: none; }
+.sq-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+.sq-card {
+  aspect-ratio: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,.05);
+  padding: 12px;
+  overflow: hidden;
+  min-height: 140px;
+  box-sizing: border-box;
+}
+.sq-card .sq-title { font-weight: 700; font-size: 14px; margin: 0 0 6px; }
+.sq-card .sq-desc { font-size: 11px; color: var(--muted); flex: 1; overflow: hidden; }
+.sq-card .sq-price {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,.1);
+  font-weight: 800;
+  font-size: 13px;
+}
+.chg-up { color: #34d399 !important; font-weight: 700; }
+.chg-down { color: #f87171 !important; font-weight: 700; }
+.form-grid label { display: block; margin-bottom: 10px; font-size: 13px; }
+.form-grid input, .form-grid select, .form-grid textarea {
+  width: 100%;
+  margin-top: 4px;
+  box-sizing: border-box;
+}
+
 </style>
 </head>
 <body>
@@ -322,6 +398,11 @@ html[data-theme="glass"] .sidebar,html[data-theme="glass"] .page,html[data-theme
         <p data-i18n="home_desc">پلتفرم یکپارچه چت، تولید تصویر و ویدئو، پشتیبانی و مدیریت — با تم فضایی و پشتیبانی فارسی.</p>
       </div>
       <div class="grid" id="featureCards"></div>
+      <div class="card" id="ktbaStatusCard" style="margin-top:14px">
+        <h3 style="margin-top:0">معماری سه‌پل (KTBA)</h3>
+        <p style="font-size:13px;color:var(--muted);margin:0 0 8px">پل F (C++↔Python) · پل X (Java↔Python) · پل G (Java↔C++)</p>
+        <div id="ktbaStatusBody" class="empty">در حال بررسی…</div>
+      </div>
       <div style="margin-top:20px">
         <h3 data-i18n="recent_activity">وضعیت سرویس‌ها</h3>
         <div class="grid" id="statusCards"></div>
@@ -518,75 +599,91 @@ int main() {
         <p style="font-size:13px">سؤال برنامه‌نویسی دارید؟ از <button type="button" class="btn" data-goto="chat">چت کاوش</button> بپرسید.</p>
       </div>
     </section>
-
-    
-        <section class="page" id="page-bourse">
+    <section class="page" id="page-bourse">
       <h2 style="margin-top:0">بورس کاوش</h2>
       <p class="alert">شبیه‌سازی آموزشی — قیمت‌ها واقعی نیستند. سهمیه هر حساب از ۰٪ تا ۱۰۰۰٪.</p>
-      <div class="grid">
+      <div class="bourse-stack">
         <div class="card">
-          <h3 style="margin-top:0">نمادها</h3>
+          <h3 style="margin-top:0">جدول نمادها</h3>
           <div id="bourseList" class="empty">در حال بارگذاری…</div>
         </div>
         <div class="card">
-          <h3 style="margin-top:0">سهمیه حساب من</h3>
-          <p id="bourseAccount" style="font-size:13px;color:var(--muted)">—</p>
-          <div id="myHoldings" class="empty">وارد شوید تا سهمیه را ببینید.</div>
-          <hr style="border-color:var(--line);margin:14px 0">
-          <h3>انتقال سهمیه</h3>
-          <div class="form-grid">
-            <label>نماد <input type="text" id="tfSymbol" placeholder="مثلاً EDU"></label>
-            <label>درصد (۰ تا ۱۰۰۰) <input type="number" id="tfPercent" min="0" max="1000" step="0.1" value="10"></label>
-            <label>حساب مقصد (نقش یا نام کاربری) <input type="text" id="tfTo" placeholder="student12 یا user_ali"></label>
-            <button type="button" class="btn btn-primary" id="tfBtn">انتقال</button>
-            <div id="tfMsg"></div>
+          <h3 style="margin-top:0">کارت نمادها</h3>
+          <div id="bourseCards" class="empty">—</div>
+        </div>
+        <div class="bourse-row">
+          <div class="card">
+            <h3 style="margin-top:0">سهمیه حساب من</h3>
+            <p id="bourseAccount" style="font-size:13px;color:var(--muted)">—</p>
+            <div id="myHoldings" class="empty">وارد شوید تا سهمیه را ببینید.</div>
           </div>
-          <hr style="border-color:var(--line);margin:14px 0">
-          <h3>ثبت/تنظیم سهمیه</h3>
-          <p style="font-size:12px;color:var(--muted)">مدیر می‌تواند برای هر حساب تنظیم کند؛ کاربر برای حساب خودش.</p>
-          <div class="form-grid">
-            <label>حساب <input type="text" id="grAccount" placeholder="خالی = خودم"></label>
-            <label>نماد <input type="text" id="grSymbol" placeholder="EDU"></label>
-            <label>درصد <input type="number" id="grPercent" min="0" max="1000" step="0.1" value="100"></label>
-            <button type="button" class="btn" id="grHoldBtn">ثبت سهمیه</button>
-            <div id="grHoldMsg"></div>
+          <div class="card">
+            <h3 style="margin-top:0">انتقال سهمیه</h3>
+            <div class="form-grid">
+              <label>نماد <input type="text" id="tfSymbol" placeholder="مثلاً EDU"></label>
+              <label>درصد (۰ تا ۱۰۰۰) <input type="number" id="tfPercent" min="0" max="1000" step="0.1" value="10"></label>
+              <label>حساب مقصد <input type="text" id="tfTo" placeholder="student12 یا نام کاربری"></label>
+              <button type="button" class="btn btn-primary" id="tfBtn">انتقال</button>
+              <div id="tfMsg"></div>
+            </div>
           </div>
-          <hr style="border-color:var(--line);margin:14px 0">
-          <h3>🎁 سهمیه معلم → دانش‌آموز (نامحدود)</h3>
-          <p style="font-size:12px;color:var(--muted)">معلمان و مدیران سهمیه بی‌نهایت دارند و هر وقت بخواهند به دانش‌آموز می‌دهند.</p>
-          <div class="form-grid">
-            <label>حساب دانش‌آموز <input type="text" id="tgStudent" placeholder="student5 یا نام کاربری"></label>
-            <label>نماد <input type="text" id="tgSymbol" value="EDU"></label>
-            <label>درصد (۰ تا ۱۰۰۰) <input type="number" id="tgPercent" min="0" max="1000" value="50"></label>
-            <button type="button" class="btn btn-primary" id="tgBtn">دادن سهمیه</button>
-            <div id="tgMsg"></div>
+        </div>
+        <div class="bourse-row">
+          <div class="card">
+            <h3 style="margin-top:0">ثبت / تنظیم سهمیه</h3>
+            <p style="font-size:12px;color:var(--muted)">مدیر برای دیگران؛ کاربر برای خودش.</p>
+            <div class="form-grid">
+              <label>حساب <input type="text" id="grAccount" placeholder="خالی = خودم"></label>
+              <label>نماد <input type="text" id="grSymbol" placeholder="EDU"></label>
+              <label>درصد <input type="number" id="grPercent" min="0" max="1000" step="0.1" value="100"></label>
+              <button type="button" class="btn" id="grHoldBtn">ثبت سهمیه</button>
+              <div id="grHoldMsg"></div>
+            </div>
+          </div>
+          <div class="card">
+            <h3 style="margin-top:0">🎁 سهمیه معلم → دانش‌آموز</h3>
+            <p style="font-size:12px;color:var(--muted)">معلمان سهمیه نامحدود دارند.</p>
+            <div class="form-grid">
+              <label>حساب دانش‌آموز <input type="text" id="tgStudent" placeholder="student5"></label>
+              <label>نماد <input type="text" id="tgSymbol" value="EDU"></label>
+              <label>درصد <input type="number" id="tgPercent" min="0" max="1000" value="50"></label>
+              <button type="button" class="btn btn-primary" id="tgBtn">دادن سهمیه</button>
+              <div id="tgMsg"></div>
+            </div>
           </div>
         </div>
       </div>
     </section>
 
 
-    <section class="page" id="page-market">
+
+        <section class="page" id="page-market">
       <h2 style="margin-top:0">بازار آزاد کاوش</h2>
-      <p class="alert">هرکس می‌تواند آگهی بگذارد (با یا بدون ورود). قیمت با <strong>کاوش</strong> یا <strong>تومان</strong>. پرداخت واقعی خودکار نیست.</p>
-      <div class="card" style="margin-bottom:14px">
-        <h3>ثبت آگهی فروش</h3>
-        <div class="form-grid">
-          <label>عنوان <input type="text" id="mktTitle"></label>
-          <label>توضیحات <textarea id="mktDesc" rows="2"></textarea></label>
-          <label>قیمت <input type="number" id="mktPrice" min="1" step="1"></label>
-          <label>واحد
-            <select id="mktCur"><option value="kavosh">کاوش</option><option value="toman">تومان</option></select>
-          </label>
-          <label>نام فروشنده (اگر وارد نشده‌اید) <input type="text" id="mktSeller" placeholder="اختیاری"></label>
-          <label>سهمیه برای خرید (۰ تا ۱۰۰۰، اختیاری) <input type="number" id="mktSharePercent" min="0" max="1000" step="0.1" value="0"></label>
-          <label>نماد سهمیه <input type="text" id="mktShareSymbol" placeholder="EDU" value="EDU"></label>
-          <button class="btn btn-primary" type="button" id="mktPostBtn">انتشار آگهی</button>
-          <div id="mktMsg"></div>
+      <p class="alert">هرکس می‌تواند آگهی بگذارد. قیمت با کاوش یا تومان؛ می‌توان سهمیه خرید هم گذاشت.</p>
+      <div class="market-stack">
+        <div class="card">
+          <h3 style="margin-top:0">ثبت آگهی فروش</h3>
+          <div class="form-grid">
+            <label>عنوان <input type="text" id="mktTitle"></label>
+            <label>توضیحات <textarea id="mktDesc" rows="2"></textarea></label>
+            <label>قیمت <input type="number" id="mktPrice" min="0" step="1" value="0"></label>
+            <label>واحد
+              <select id="mktCurrency"><option value="kavosh">کاوش</option><option value="toman">تومان</option></select>
+            </label>
+            <label>سهمیه برای خرید (۰ تا ۱۰۰۰) <input type="number" id="mktSharePercent" min="0" max="1000" step="0.1" value="0"></label>
+            <label>نماد سهمیه <input type="text" id="mktShareSymbol" placeholder="EDU" value="EDU"></label>
+            <label>نام فروشنده (اختیاری) <input type="text" id="mktSeller"></label>
+            <button class="btn btn-primary" type="button" id="mktPostBtn">انتشار آگهی</button>
+            <div id="mktMsg"></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0">آگهی‌های فعال</h3>
+          <div id="marketList" class="empty">در حال بارگذاری…</div>
         </div>
       </div>
-      <div id="mktList" class="grid"></div>
     </section>
+
 
     <section class="page" id="page-shop">
       <h2 style="margin-top:0">فروشگاه کاوش</h2>
@@ -2327,29 +2424,37 @@ function applyHideImageStudio(on){
 
 async function loadBourse(){
   const box = $('bourseList');
+  const cardsBox = $('bourseCards');
   try {
     const {data} = await api('/api/bourse');
     const syms = data.symbols || [];
     if (box) {
       if (!syms.length) box.innerHTML = '<div class="empty">نمادی نیست</div>';
       else {
-        let table = '<table class="price-table"><thead><tr><th>نماد</th><th>نام</th><th>قیمت</th><th>تغییر</th></tr></thead><tbody>';
+        let table = '<div class="table-wrap"><table class="price-table"><thead><tr><th>نماد</th><th>نام</th><th>قیمت</th><th>تغییر</th></tr></thead><tbody>';
         table += syms.map(s => {
           const ch = Number(s.change_pct || 0);
           const cls = ch >= 0 ? 'chg-up' : 'chg-down';
           const sign = ch > 0 ? '+' : '';
           return '<tr><td><strong>' + escapeHtml(s.id) + '</strong></td><td>' + escapeHtml(s.name||'') + '</td><td>' + escapeHtml(String(s.price||0)) + '</td><td class="' + cls + '">' + sign + escapeHtml(String(ch)) + '٪</td></tr>';
         }).join('');
-        table += '</tbody></table>';
-        const cards = '<div class="sq-grid" style="margin-top:12px">' + syms.map(s => {
+        table += '</tbody></table></div>';
+        box.innerHTML = table;
+      }
+    }
+    if (cardsBox) {
+      if (!syms.length) cardsBox.innerHTML = '<div class="empty">—</div>';
+      else {
+        cardsBox.innerHTML = '<div class="sq-grid">' + syms.map(s => {
           const ch = Number(s.change_pct || 0);
           const cls = ch >= 0 ? 'chg-up' : 'chg-down';
           return '<div class="sq-card"><div class="sq-title">' + escapeHtml(s.id) + '</div><div class="sq-desc">' + escapeHtml(s.name||'') + '<br><span class="' + cls + '">' + (ch>0?'+':'') + ch + '٪</span></div><div class="sq-price">' + escapeHtml(String(s.price||0)) + '</div></div>';
         }).join('') + '</div>';
-        box.innerHTML = table + cards;
       }
     }
-  } catch(e) { if (box) box.innerHTML = '<div class="alert err">خطا</div>'; }
+  } catch(e) {
+    if (box) box.innerHTML = '<div class="alert err">خطا در بارگذاری</div>';
+  }
   try {
     const {data} = await api('/api/bourse/holdings');
     if ($('bourseAccount')) $('bourseAccount').textContent = data.ok ? ('حساب: ' + (data.account||'')) : 'وارد شوید';
@@ -3194,7 +3299,29 @@ document.addEventListener('click', function(ev) {
 });
 
 
+
+async function loadKtbaStatus(){
+  const el = $('ktbaStatusBody');
+  if (!el) return;
+  try {
+    const {data} = await api('/api/ktba/status');
+    if (!data || !data.ok) { el.innerHTML = '<span class="empty">KTBA در دسترس نیست</span>'; return; }
+    const bridges = (data.bridges||[]).map(b => {
+      const st = b.status === 'stub' ? 'آماده‌سازی' : (b.status || '');
+      return '<span class="badge">' + escapeHtml(b.id) + ': ' + escapeHtml(st) + '</span>';
+    }).join(' ');
+    const svcs = (data.services||[]).map(s => {
+      const ok = s.healthy ? 'ok' : 'warn';
+      return '<span class="badge ' + ok + '">' + escapeHtml(s.name) + '</span>';
+    }).join(' ');
+    el.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">' + bridges + '</div>'
+      + '<div style="display:flex;flex-wrap:wrap;gap:6px">' + svcs + '</div>'
+      + '<p style="font-size:11px;color:var(--muted);margin:8px 0 0">فاز ' + escapeHtml(String(data.phase||1)) + ' — مدیر: ' + escapeHtml(data.manager||'') + '</p>';
+  } catch(e) { el.innerHTML = '<span class="empty">خطا در وضعیت KTBA</span>'; }
+}
+
 /* init */
+try { loadKtbaStatus(); } catch(e) {}
 try { applyI18n(); } catch(e) { console.error(e); }
 try { renderFeatures(); } catch(e) { console.error(e); }
 try { renderStatusCards(); } catch(e) { console.error(e); }
