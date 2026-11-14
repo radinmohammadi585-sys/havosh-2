@@ -16,6 +16,14 @@ from economy import (
     room_join, room_heartbeat, room_members_list, board_add_stroke, board_list, board_clear,
     rtc_post, rtc_pull,
 )
+try:
+    from bridge_manager import get_manager, Envelope
+    KTBA_AVAILABLE = True
+except Exception:
+    KTBA_AVAILABLE = False
+    get_manager = None  # type: ignore
+    Envelope = None  # type: ignore
+
 from knowledge.store import (
     ensure_knowledge_tables, ingest_document, search_chunks,
     list_documents, create_purchase, list_purchases, update_purchase_status,
@@ -2304,6 +2312,13 @@ class Handler(BaseHTTPRequestHandler):
                 "models": list_available_chat_models(),
             })
 
+        if path == "/api/ktba/status":
+            if not KTBA_AVAILABLE:
+                return self.send_json(200, {"ok": True, "phase": 0, "architecture": "KTBA", "note": "ماژول KTBA بارگذاری نشد"})
+            try:
+                return self.send_json(200, get_manager().status())
+            except Exception as exc:
+                return self.send_json(200, {"ok": False, "error": str(exc)[:200]})
         if path == "/api/me":
 
             s = self.session()
@@ -3906,6 +3921,27 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, out)
             except ValueError as exc: return self.send_json(400, {"ok": False, "error": str(exc)[:500]})
             except (RuntimeError, TimeoutError, OSError) as exc: return self.send_json(500, {"ok": False, "error": str(exc)[:500]})
+        if path == "/api/ktba/route":
+            if not KTBA_AVAILABLE:
+                return self.send_json(503, {"ok": False, "error": "KTBA در دسترس نیست"})
+            try:
+                body = self.read_json(50_000)
+            except ValueError as exc:
+                return self.send_json(400, {"ok": False, "error": str(exc)})
+            try:
+                env = Envelope(
+                    source=str(body.get("source") or "python"),
+                    target=str(body.get("target") or ""),
+                    intent=str(body.get("intent") or "default"),
+                    payload=body.get("payload"),
+                    hop_budget=int(body.get("hop_budget") or 3),
+                    deadline_ms=int(body.get("deadline_ms") or 8000),
+                )
+                result = get_manager().route(env)
+                return self.send_json(200, {"ok": bool(result.ok), "envelope": result.to_dict()})
+            except Exception as exc:
+                return self.send_json(500, {"ok": False, "error": str(exc)[:300]})
+
         return self.send_json(404, {"ok": False, "error": "مسیر پیدا نشد."})
 
 def main():

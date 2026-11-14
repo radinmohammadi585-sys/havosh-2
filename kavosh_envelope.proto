@@ -1,0 +1,25 @@
+syntax = "proto3";
+package kavosh.ktba;
+
+// Logical contract for future gRPC — Phase 1 uses JSON equivalent in Python.
+
+message Envelope {
+  string request_id = 1;
+  string correlation_id = 2;
+  string source = 3;
+  string target = 4;
+  string intent = 5;
+  int32 hop_budget = 6;
+  repeated string visited = 7;
+  int32 deadline_ms = 8;
+  bytes payload = 9;
+  bool ok = 10;
+  string error_code = 11;
+  string error_message = 12;
+}
+
+message HealthRequest {}
+message HealthReply {
+  bool healthy = 1;
+  string service = 2;
+}
